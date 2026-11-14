@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Отчёты школы</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-secondary-bg-color, #efeff4);
+    --card: var(--tg-theme-section-bg-color, var(--tg-theme-bg-color, #ffffff));
+    --text: var(--tg-theme-text-color, #0f0f0f);
+    --hint: var(--tg-theme-hint-color, #8e8e93);
+    --accent: var(--tg-theme-button-color, #2481cc);
+    --accent-text: var(--tg-theme-button-text-color, #ffffff);
+    --link: var(--tg-theme-link-color, #2481cc);
+    --danger: var(--tg-theme-destructive-text-color, #e53935);
+    --sep: var(--tg-theme-section-separator-color, rgba(127, 127, 127, .22));
+    --field: var(--tg-theme-bg-color, #ffffff);
+    --soft: rgba(127, 127, 127, .13);
+    --ok: #2fa66a;
+    --warn: #d98a1c;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body { font: 16px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  #app { max-width: 560px; margin: 0 auto; padding: 16px 16px calc(32px + env(safe-area-inset-bottom)); }
+  h1 { font-size: 22px; line-height: 1.2; margin: 0 0 4px; font-weight: 700; letter-spacing: -.01em; }
+  h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--hint); margin: 22px 0 10px; }
+  .card > h2:first-child, form > h2:first-child { margin-top: 0; }
+  .sub { color: var(--hint); font-size: 14px; }
+  .hint { color: var(--hint); font-size: 13px; margin-top: 6px; line-height: 1.35; }
+  .head, .hello { margin: 4px 4px 16px; }
+  .card { background: var(--card); border-radius: 16px; padding: 16px; margin: 0 0 12px; }
+  .mt { margin-top: 12px; }
+  .center-text { text-align: center; }
+  .big { font-size: 32px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .big-ic { font-size: 44px; line-height: 1; margin: 6px 0 12px; }
+
+  .btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 50px; border: 0; border-radius: 12px; padding: 12px 16px; font: inherit; font-weight: 600; background: var(--accent); color: var(--accent-text); cursor: pointer; position: relative; text-align: center; }
+  .btn:active { opacity: .85; }
+  .btn:disabled { opacity: .65; }
+  .btn.ghost { background: var(--soft); color: var(--text); }
+  .btn.ok { background: var(--ok); color: #fff; }
+  .btn.bad { background: var(--soft); color: var(--danger); }
+  .btn.small { min-height: 42px; padding: 8px 10px; font-size: 15px; }
+  .btn.loading { color: transparent !important; }
+  .btn.loading::after { content: ""; position: absolute; width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid rgba(255, 255, 255, .35); border-top-color: #fff; animation: spin .7s linear infinite; }
+  .btn.ghost.loading::after, .btn.bad.loading::after { border-color: rgba(127, 127, 127, .3); border-top-color: var(--accent); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 12px; }
+  .tile { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 100px; padding: 14px; border: 0; border-radius: 16px; background: var(--card); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+  .tile:active { opacity: .8; }
+  .tile .ic { font-size: 26px; line-height: 1; margin-bottom: 10px; }
+  .tile .t { font-weight: 600; font-size: 15px; line-height: 1.25; }
+  .tile .s { color: var(--hint); font-size: 13px; }
+  .badge { position: absolute; top: 10px; right: 10px; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--danger); color: #fff; font-size: 13px; font-weight: 700; line-height: 22px; text-align: center; }
+
+  .shift .t { font-weight: 600; font-size: 17px; }
+  .shift-row { display: flex; gap: 12px; align-items: center; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 4px rgba(47, 166, 106, .2); flex: none; }
+  .dot.warn { background: var(--warn); box-shadow: 0 0 0 4px rgba(217, 138, 28, .2); }
+  .alert { display: block; width: 100%; text-align: left; border: 0; font: inherit; color: var(--text); background: rgba(217, 138, 28, .16); cursor: pointer; }
+
+  .field { display: block; margin: 0 0 14px; min-width: 0; }
+  .lbl { display: block; font-size: 14px; color: var(--hint); margin: 0 0 6px; }
+  .opt { opacity: .75; }
+  .field input, .field select, .field textarea { display: block; width: 100%; min-width: 0; min-height: 48px; padding: 12px; border: 1px solid var(--sep); border-radius: 12px; background-color: var(--field); color: var(--text); font: inherit; font-size: 16px; outline: none; -webkit-appearance: none; appearance: none; }
+  .field textarea { resize: vertical; min-height: 0; }
+  .field select { padding-right: 36px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%238e8e93' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
+  .field.err input, .field.err select, .field.err textarea { border-color: var(--danger); }
+  .field input::-webkit-date-and-time-value { text-align: left; }
+  .field input::placeholder, .field textarea::placeholder { color: var(--hint); opacity: .8; }
+
+  .seg { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--soft); }
+  .seg.grid2 { display: grid; grid-template-columns: 1fr 1fr; }
+  .seg button { flex: 1; min-height: 40px; border: 0; border-radius: 9px; background: transparent; color: var(--text); font: inherit; font-size: 15px; padding: 6px 8px; cursor: pointer; }
+  .seg button.on { background: var(--card); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
+  .seg-wide { margin-bottom: 16px; }
+
+  .note { background: var(--soft); border-radius: 12px; padding: 12px; font-size: 14px; margin: 0 0 14px; line-height: 1.4; }
+  .kv { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 0; border-top: 1px solid var(--sep); }
+  .card > .kv:first-child, h2 + .kv { border-top: 0; padding-top: 0; }
+  .kv span { color: var(--hint); }
+  .kv b { text-align: right; font-variant-numeric: tabular-nums; }
+  .item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--sep); }
+  h2 + .item { border-top: 0; padding-top: 0; }
+  .item b { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .pos { color: var(--ok); }
+  .neg { color: var(--danger); }
+
+  .trial .row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .trial .name { font-weight: 600; font-size: 17px; }
+  .trial .when { color: var(--hint); font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .trial a { color: var(--link); text-decoration: none; }
+  .actions4 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .move { margin-top: 14px; }
+  .books { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+  .diff { font-size: 14px; margin: -6px 0 14px; min-height: 0; }
+  .diff.ok { color: var(--ok); }
+  .diff.warn { color: var(--warn); }
+  .preview { white-space: pre-wrap; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 0 0 12px; }
+  .kpi { background: var(--card); border-radius: 16px; padding: 14px 8px; text-align: center; }
+  .kpi b { display: block; font-size: 26px; font-variant-numeric: tabular-nums; }
+  .kpi span { color: var(--hint); font-size: 13px; }
+  .scroll { overflow-x: auto; margin: 0 -16px; padding: 0 16px; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 9px 6px; border-top: 1px solid var(--sep); white-space: nowrap; text-align: left; }
+  thead th { border-top: 0; padding-top: 0; color: var(--hint); font-weight: 500; font-size: 12px; }
+  th:first-child, td:first-child { padding-left: 0; }
+  td:first-child { font-weight: 500; }
+  .n { text-align: right; }
+
+  .link { display: block; background: none; border: 0; padding: 12px 0 0; color: var(--link); font: inherit; cursor: pointer; }
+  .back { background: none; border: 0; padding: 0 0 10px; color: var(--link); font: inherit; cursor: pointer; }
+  .center { display: flex; justify-content: center; padding: 96px 0; }
+  .spinner { width: 28px; height: 28px; border: 3px solid rgba(127, 127, 127, .25); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+  .empty { text-align: center; padding: 28px 16px; }
+
+  #toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); max-width: 528px; margin: 0 auto; padding: 12px 16px; border-radius: 12px; background: rgba(28, 28, 30, .94); color: #fff; font-size: 15px; opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s; pointer-events: none; z-index: 20; }
+  #toast.show { opacity: 1; transform: none; }
+  #toast.err { background: #d93636; }
+  body.busy::before { content: ""; position: fixed; top: 0; left: 0; height: 3px; width: 40%; background: var(--accent); animation: bar 1s ease-in-out infinite; z-index: 30; }
+  @keyframes bar { from { left: -40%; } to { left: 100%; } }
+  @media (max-width: 360px) { .grid, .two { gap: 8px; } .tile { padding: 12px; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div id="app"><div class="center"><div class="spinner"></div></div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<!-- APP -->
+<script>
+(() => {
+  'use strict';
+
+  // Адрес веб-приложения Apps Script: «Развернуть» → «Управление развертываниями» → «URL веб-приложения».
+  const API_URL = 'https://script.google.com/macros/s/AKfycbzTmChGoQKUjv7VCf8htMkyDKGHI4EVc0XYf6tjFCOwTHTV_pZGfgo_NBmyWabcXJqs/exec';
+
+  const tg = window.Telegram && window.Telegram.WebApp;
+  const inTg = !!(tg && tg.initData && tg.platform && tg.platform !== 'unknown');
+  const $app = document.getElementById('app');
+  const $toast = document.getElementById('toast');
+  let S = null;      // состояние с сервера
+  let view = 'home'; // текущий экран
+  let vd = {};       // данные экрана
+  let busy = false;
+  let backBound = false;
+
+  // ───────── помощники ─────────
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const pad = (n) => String(n).padStart(2, '0');
+  const nowHM = () => { const d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+  const dur = (mins) => { const h = Math.floor(mins / 60), m = mins % 60; return h ? h + ' ч ' + m + ' мин' : m + ' мин'; };
+  function fmtNum(n) {
+    const r = Math.round(Number(n) * 100) / 100;
+    const p = Math.abs(r).toFixed(2).split('.');
+    return (r < 0 ? '−' : '') + p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + (p[1] === '00' ? '' : ',' + p[1].replace(/0$/, ''));
+  }
+  const money = (n) => (n == null ? '—' : fmtNum(n) + (S && S.currency ? ' ' + S.currency : ''));
+  const toNum = (v) => { const s = String(v == null ? '' : v).replace(/[\s ]/g, '').replace(',', '.'); if (!s) return null; const n = Number(s); return isFinite(n) ? n : null; };
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* приватный режим */ } },
+  };
+  function haptic(type) { try { if (inTg && tg.isVersionAtLeast('6.1')) tg.HapticFeedback.notificationOccurred(type); } catch (e) { /* нет вибрации */ } }
+  function confirmBox(msg) {
+    return new Promise((resolve) => {
+      try { if (inTg && tg.isVersionAtLeast('6.2')) { tg.showConfirm(msg, (ok) => resolve(!!ok)); return; } } catch (e) { /* старый клиент */ }
+      resolve(window.confirm(msg));
+    });
+  }
+  let toastTimer;
+  function toast(msg, err) {
+    $toast.textContent = msg;
+    $toast.className = 'show' + (err ? ' err' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { $toast.className = ''; }, err ? 5000 : 2600);
+  }
+
+  // ───────── связь с сервером ─────────
+  async function api(action, payload) {
+    const body = JSON.stringify({ action, initData: tg ? tg.initData : '', point: S ? S.point : store.get('point'), payload: payload || {} });
+    let res;
+    try {
+      res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body });
+    } catch (e) {
+      throw new Error('Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.');
+    }
+    let data;
+    try { data = await res.json(); } catch (e) {
+      throw new Error('Сервер ответил с ошибкой (' + res.status + '). Проверьте адрес веб-приложения в index.html.');
+    }
+    if (data.status === 'pending') {
+      S = null;
+      showPending(data);
+      const err = new Error('pending');
+      err.silent = true;
+      throw err;
+    }
+    if (!data.ok) throw new Error(data.error || 'Неизвестная ошибка');
+    if (data.state) { S = data.state; store.set('point', S.point); }
+    return data;
+  }
+
+  async function run(btn, fn, onOk) {
+    if (busy) return;
+    busy = true;
+    document.body.classList.add('busy');
+    if (btn) { btn.disabled = true; btn.classList.add('loading'); }
+    try {
+      const d = await fn();
+      haptic('success');
+      if (onOk) onOk(d);
+    } catch (e) {
+      if (!e.silent) { toast(e.message, true); haptic('error'); }
+    } finally {
+      busy = false;
+      document.body.classList.remove('busy');
+      if (btn && btn.isConnected) { btn.disabled = false; btn.classList.remove('loading'); }
+    }
+  }
+
+  // ───────── навигация ─────────
+  const VIEWS = { home: vHome, trial: vTrial, mark: vMark, sale: vSale, cash: vCash, cashForm: vCashForm, close: vClose, done: vDone, summary: vSummary };
+  const PARENT = { cashForm: 'cash' };
+  const FRESH = { close: true, mark: true, cash: true }; // перед открытием обновить данные
+
+  function go(v, data) {
+    view = v;
+    vd = data || {};
+    render();
+    window.scrollTo(0, 0);
+  }
+  function openView(v, data) {
+    if (FRESH[v]) run(null, () => api('init'), () => go(v, data));
+    else go(v, data);
+  }
+  function back() { go(view === 'done' ? 'home' : (PARENT[view] || 'home')); }
+  function render() {
+    if (!S) return;
+    $app.innerHTML = VIEWS[view]();
+    if (inTg) { try { if (view === 'home') tg.BackButton.hide(); else tg.BackButton.show(); } catch (e) { /* старый клиент */ } }
+    if (view === 'sale') updateTrialInfo();
+    if (view === 'close') updateDiff();
+  }
+  const head = (title, sub) => `<div class="head">${inTg ? '' : '<button class="back" data-act="back" type="button">‹ Назад</button>'}<h1>${esc(title)}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+
+  // ───────── поля форм ─────────
+  const val = (name, def) => (vd.values && vd.values[name] !== undefined ? vd.values[name] : (def == null ? '' : def));
+  const field = (label, req, inner, hint) =>
+    `<label class="field"><span class="lbl">${esc(label)}${req ? '' : '<span class="opt"> · по желанию</span>'}</span>${inner}${hint ? `<span class="hint">${hint}</span>` : ''}</label>`;
+  function input(name, label, o = {}) {
+    const a = [`name="${name}"`, `type="${o.type || 'text'}"`, `value="${esc(val(name, o.value))}"`, 'autocomplete="off"'];
+    if (o.req) a.push('required');
+    if (o.placeholder) a.push(`placeholder="${esc(o.placeholder)}"`);
+    if (o.inputmode) a.push(`inputmode="${o.inputmode}"`);
+    if (o.pattern) a.push(`pattern="${o.pattern}"`);
+    return field(label, o.req, `<input ${a.join(' ')}>`, o.hint);
+  }
+  const numInput = (name, label, o = {}) => input(name, label, Object.assign({
+    inputmode: o.int ? 'numeric' : 'decimal', pattern: o.int ? '[0-9]+' : '[0-9 ]+([.,][0-9]{1,2})?', placeholder: '0',
+  }, o));
+  function select(name, label, options, o = {}) {
+    if (!options.length) return input(name, label, o);
+    const cur = String(val(name, o.value));
+    let first = '';
+    if (o.empty !== undefined) first = `<option value="">${esc(o.empty)}</option>`;
+    else if (!cur) first = '<option value="" disabled selected hidden>Выберите…</option>';
+    const opts = options.map((x) => {
+      const v = typeof x === 'string' ? x : x.value;
+      const l = typeof x === 'string' ? x : x.label;
+      return `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`;
+    }).join('');
+    return field(label, o.req, `<select name="${name}"${o.req ? ' required' : ''}>${first}${opts}</select>`, o.hint);
+  }
+  const area = (name, label, o = {}) => field(label, o.req,
+    `<textarea name="${name}" rows="${o.rows || 3}"${o.req ? ' required' : ''} placeholder="${esc(o.placeholder || '')}">${esc(val(name, ''))}</textarea>`, o.hint);
+  function seg(name, label, options, cur) {
+    return `<div class="field"><span class="lbl">${esc(label)}</span><div class="seg${options.length > 3 ? ' grid2' : ''}">` +
+      options.map((x) => `<button type="button" data-act="seg" data-value="${esc(x)}" class="${x === cur ? 'on' : ''}">${esc(x)}</button>`).join('') +
+      `</div><input type="hidden" name="${name}" value="${esc(cur)}"></div>`;
+  }
+  function teacherSelect(instr, cur) {
+    if (!S.teachers.length) return input('teacher', 'Учитель', { value: cur });
+    const list = S.teachers.filter((t) => !instr || !t.instruments.length || t.instruments.indexOf(instr) >= 0).map((t) => t.name);
+    return select('teacher', 'Учитель', list, { empty: list.length ? '— не выбран —' : '— нет учителя на этот инструмент —', value: list.indexOf(cur) >= 0 ? cur : '' });
+  }
+  const formValues = (form) => { const o = {}; new FormData(form).forEach((v, k) => { o[k] = String(v); }); return o; };
+  function keep() { const f = $app.querySelector('form'); if (f) vd.values = Object.assign(vd.values || {}, formValues(f)); }
+  function validate(form) {
+    form.querySelectorAll('.field.err').forEach((x) => x.classList.remove('err'));
+    const bad = Array.prototype.find.call(form.elements, (el) => el.willValidate && !el.checkValidity());
+    if (!bad) return true;
+    const f = bad.closest('.field');
+    const lbl = f && f.querySelector('.lbl') ? f.querySelector('.lbl').firstChild.textContent : '';
+    if (f) f.classList.add('err');
+    try { bad.focus(); } catch (e) { /* ignore */ }
+    toast((bad.validity.patternMismatch ? 'Проверьте поле: ' : 'Заполните поле: ') + lbl, true);
+    return false;
+  }
+
+  // ───────── экраны ─────────
+  function vHome() {
+    const sh = S.shift, st = S.stats, u = S.user;
+    const pastCount = S.trialsToMark.filter((t) => t.past).length;
+    let h = `<div class="hello"><h1>Привет, ${esc(u.firstName)} 👋</h1><div class="sub">${esc(S.todayLabel)} · ${u.isManager ? 'управляющий' : 'админ'}</div></div>`;
+    if (S.points.length > 1) {
+      h += '<div class="card">' + (sh.open
+        ? `<div class="kv"><span>Точка</span><b>${esc(S.point)}</b></div><div class="hint">Пока идёт смена, точку сменить нельзя.</div>`
+        : select('homePoint', 'Точка', S.points, { value: S.point, req: true })) + '</div>';
+    }
+    const where = S.points.length > 1 ? '' : ' · ' + esc(S.point);
+    if (sh.open) {
+      const mins = Math.max(0, Math.round((Date.now() - sh.startTs) / 60000));
+      h += `<div class="card shift"><div class="shift-row"><span class="dot${sh.stale ? ' warn' : ''}"></span><div>
+        <div class="t">Смена идёт с ${esc(sh.start)}${sh.stale ? ' (' + esc(sh.startDay) + ')' : ''}</div>
+        <div class="sub" data-tick>${sh.stale ? 'Вчерашняя смена не закрыта — закройте её' : dur(mins) + where}</div></div></div></div>`;
+    } else {
+      h += `<div class="card shift"><div class="t">Смена не начата</div><div class="sub">Нажмите, когда пришли на работу${where}</div>
+        <button class="btn mt" data-act="startShift" type="button">▶️ Начать смену</button></div>`;
+    }
+    if (pastCount) h += `<button class="card alert" data-go="mark" type="button">⏰ Отметьте, пришли ли на пробное: <b>${pastCount}</b> ›</button>`;
+    h += '<div class="grid">' +
+      tile('trial', '📝', 'Запись на пробное', st.booked ? 'сегодня: ' + st.booked : 'новый клиент') +
+      tile('mark', '✅', 'Пробные', S.trialsToMark.length ? 'отметить: ' + S.trialsToMark.length : 'всё отмечено', pastCount) +
+      tile('sale', '💳', 'Продажа', st.sales ? 'сегодня: ' + st.sales : 'абонемент') +
+      tile('cash', '💵', 'Касса', S.cash.expected != null ? money(S.cash.expected) : 'приход и расход') +
+      '</div>';
+    h += `<button class="btn${sh.open ? '' : ' ghost'}" data-go="close" type="button">🏁 ${sh.open ? 'Закрыть смену и отправить отчёт' : 'Заполнить отчёт за день'}</button>`;
+    if (u.isManager) h += '<button class="btn ghost mt" data-go="summary" type="button">📊 Итоги месяца</button>';
+    return h;
+  }
+  const tile = (goTo, ic, t, s, badge) =>
+    `<button class="tile" data-go="${goTo}" type="button">${badge ? `<span class="badge">${badge}</span>` : ''}<span class="ic">${ic}</span><span class="t">${esc(t)}</span><span class="s">${esc(s)}</span></button>`;
+
+  function vTrial() {
+    return head('Запись на пробное', esc(S.point)) + '<form class="card" data-submit="addTrial" novalidate>' +
+      input('client', 'Имя и фамилия клиента', { req: true, placeholder: 'Например, Анна Новак' }) +
+      input('phone', 'Телефон', { type: 'tel', inputmode: 'tel', placeholder: '+420 …' }) +
+      select('instrument', 'Инструмент', S.lists.instruments, { req: true }) +
+      `<div id="teacherBox">${teacherSelect(val('instrument', ''), val('teacher', ''))}</div>` +
+      '<div class="two">' + input('date', 'Дата', { type: 'date', req: true, value: S.today }) + input('time', 'Время', { type: 'time', req: true }) + '</div>' +
+      (S.lists.sources.length ? select('source', 'Откуда узнали о школе', S.lists.sources, { empty: '—' }) : '') +
+      area('comment', 'Комментарий', { rows: 2, placeholder: 'Возраст, опыт, пожелания…' }) +
+      '<button class="btn" type="submit">Записать на пробное</button></form>';
+  }
+
+  function vMark() {
+    const list = S.trialsToMark;
+    const h = head('Пробные занятия', 'Отметьте, пришёл ли клиент');
+    if (!list.length) return h + '<div class="card empty">Все пробные отмечены 👍<div class="hint">Здесь появляются пробные за сегодня и прошлые дни.</div></div>';
+    return h + list.map((t) => `<div class="card trial">
+      <div class="row"><div class="name">${esc(t.client)}</div><div class="when">${esc(t.when)}</div></div>
+      <div class="sub">${esc(t.instrument || '—')}${t.teacher ? ' · ' + esc(t.teacher) : ''}${t.phone ? ` · <a href="tel:${esc(t.phone.replace(/\s/g, ''))}">${esc(t.phone)}</a>` : ''}</div>
+      <div class="hint">Записал(а): ${esc(t.bookedBy)}${t.past ? '' : ' · ещё не началось'}</div>
+      ${vd.moving === t.id ? moveForm(t) : `<div class="actions4">
+        <button class="btn small ok" type="button" data-act="mark" data-id="${esc(t.id)}" data-status="Пришёл">Пришёл</button>
+        <button class="btn small bad" type="button" data-act="mark" data-id="${esc(t.id)}" data-status="Не пришёл">Не пришёл</button>
+        <button class="btn small ghost" type="button" data-act="moveOpen" data-id="${esc(t.id)}">Перенос</button>
+        <button class="btn small ghost" type="button" data-act="mark" data-id="${esc(t.id)}" data-status="Отменил">Отменил</button>
+      </div>`}</div>`).join('');
+  }
+  const moveForm = (t) => '<div class="move"><div class="two">' +
+    input('mdate', 'Новая дата', { type: 'date', req: true, value: S.today }) + input('mtime', 'Время', { type: 'time', req: true }) +
+    `</div><div class="two"><button class="btn small ghost" type="button" data-act="moveCancel">Отмена</button><button class="btn small" type="button" data-act="moveSave" data-id="${esc(t.id)}">Перенести</button></div></div>`;
+
+  function vSale() {
+    const forSale = S.trialsForSale;
+    const mode = vd.mode || (forSale.length ? 'trial' : 'direct');
+    let h = head('Продажа абонемента', esc(S.point)) + '<form class="card" data-submit="addSale" novalidate>';
+    h += `<div class="seg seg-wide"><button type="button" data-act="saleMode" data-mode="trial" class="${mode === 'trial' ? 'on' : ''}">После пробного</button>` +
+      `<button type="button" data-act="saleMode" data-mode="direct" class="${mode === 'direct' ? 'on' : ''}">Без пробного</button></div>`;
+    if (mode === 'trial') {
+      if (!forSale.length) {
+        h += '<div class="note">Нет клиентов, которые были на пробном за последние 60 дней и ещё не купили. Отметьте пробные или выберите «Без пробного».</div>';
+        return h + '</form>';
+      }
+      h += select('trialId', 'Клиент с пробного', forSale.map((t) => ({
+        value: t.id,
+        label: t.client + ' · ' + (t.instrument || '—') + ' · ' + t.when.slice(0, 5) + (t.status === 'Пришёл' ? '' : ' (не отмечен)'),
+      })), { req: true, value: forSale.length === 1 ? forSale[0].id : '' }) + '<div id="trialInfo" class="note" hidden></div>';
+    } else {
+      h += input('client', 'Имя и фамилия клиента', { req: true }) +
+        input('phone', 'Телефон', { type: 'tel', inputmode: 'tel', placeholder: '+420 …' }) +
+        select('instrument', 'Инструмент', S.lists.instruments, { req: true }) +
+        `<div id="teacherBox">${teacherSelect(val('instrument', ''), val('teacher', ''))}</div>`;
+    }
+    h += select('subscription', 'Абонемент', S.subs.map((s) => ({ value: s.name, label: s.name + (s.price != null ? ' — ' + money(s.price) : '') })), { req: true });
+    h += numInput('amount', 'Сумма, ' + S.currency, { req: true, hint: 'Подставляется из цены абонемента — исправьте, если была скидка.' });
+    h += seg('payment', 'Оплата', S.lists.payments, val('payment', S.lists.payments[0]));
+    h += area('comment', 'Комментарий', { rows: 2, placeholder: 'Скидка, промокод, кто привёл…' });
+    return h + '<button class="btn" type="submit">💳 Сохранить продажу</button></form>';
+  }
+  function updateTrialInfo() {
+    const box = document.getElementById('trialInfo');
+    const sel = $app.querySelector('[name=trialId]');
+    if (!box || !sel) return;
+    const t = S.trialsForSale.find((x) => x.id === sel.value);
+    box.hidden = !t;
+    if (t) box.innerHTML = `Учитель: <b>${esc(t.teacher || 'не указан')}</b><br>Пробное: ${esc(t.when)} · записал(а) ${esc(t.bookedBy)}${t.phone ? '<br>Телефон: ' + esc(t.phone) : ''}`;
+  }
+
+  function vCash() {
+    const c = S.cash;
+    let h = head('Касса', esc(S.point));
+    h += '<div class="card center-text">' + (c.expected != null
+      ? `<div class="sub">Должно быть в кассе</div><div class="big">${money(c.expected)}</div>`
+      : '<div class="sub">Остаток кассы пока неизвестен</div><div class="hint">Он появится после первого закрытия смены. Или укажите начальный остаток в листе «Точки».</div>') + '</div>';
+    h += '<div class="two" style="margin-bottom:12px"><button class="btn ok" data-go="cashForm" data-type="in" type="button">＋ Приход</button>' +
+      '<button class="btn bad" data-go="cashForm" data-type="out" type="button">− Расход</button></div>';
+    h += '<div class="card"><h2>С последнего пересчёта</h2>';
+    h += c.moves.length ? c.moves.slice().reverse().map((m) => `<div class="item"><div><div>${esc(m.category)}${m.comment ? ` <span class="sub">· ${esc(m.comment)}</span>` : ''}</div>
+      <div class="hint">${esc(m.time)} · ${esc(m.admin)}</div></div><b class="${m.type === 'Расход' ? 'neg' : 'pos'}">${m.type === 'Расход' ? '−' : '+'}${money(m.amount)}</b></div>`).join('')
+      : '<div class="sub">Движений не было</div>';
+    if (c.base != null) h += `<div class="item"><div class="sub">Было на начало</div><b>${money(c.base)}</b></div>`;
+    return h + '</div>';
+  }
+  function vCashForm() {
+    const out = vd.type === 'out';
+    return head(out ? 'Расход из кассы' : 'Приход в кассу', esc(S.point)) + '<form class="card" data-submit="addCash" novalidate>' +
+      numInput('amount', 'Сумма, ' + S.currency, { req: true }) +
+      select('category', out ? 'На что' : 'За что', out ? S.lists.cashOut : S.lists.cashIn, { req: true }) +
+      area('comment', out ? 'Кому или на что — подробнее' : 'Пояснение', { req: out, rows: 2, placeholder: out ? 'Например: зарплата Ивану за ноябрь' : 'Например: книга для гитары, Анна Новак' }) +
+      '<div class="note">Продажи абонементов за наличные попадают в кассу сами — вводить их здесь не нужно.</div>' +
+      `<button class="btn${out ? ' bad' : ' ok'}" type="submit">${out ? 'Записать расход' : 'Записать приход'}</button></form>`;
+  }
+
+  function vClose() {
+    const sh = S.shift, st = S.stats, c = S.cash;
+    const held = st.came + st.noShow + st.canceled + st.unmarked;
+    let h = head(sh.open ? 'Закрыть смену' : 'Отчёт за день', esc(S.point) + ' · ' + esc(sh.open ? sh.startDay : S.todayLabel.slice(0, 5)));
+    h += '<div class="card">' +
+      kv('Регистраций на пробное', st.booked) +
+      kv('Пробные сегодня', held ? 'пришли ' + st.came + ' из ' + held : 'не было') +
+      kv('Ваши продажи', st.sales + (st.sales ? ' · ' + money(st.salesSum) : '')) +
+      kv('Касса — должно быть', c.expected != null ? money(c.expected) : '—') +
+      (st.unmarked ? `<button class="link" type="button" data-go="mark">Отметить пробные (${st.unmarked}) ›</button>` : '') + '</div>';
+    h += '<form class="card" data-submit="closeShift" novalidate><h2>Время работы</h2>' +
+      (sh.open ? '' : '<div class="note">Смена не была начата кнопкой — укажите время начала.</div>') +
+      '<div class="two">' + input('start', 'Начало', { type: 'time', req: true, value: sh.open ? sh.start : '' }) +
+      input('end', 'Конец', { type: 'time', req: true, value: nowHM() }) + '</div>';
+    if (S.lists.books.length) {
+      h += '<h2>Книги — сколько осталось</h2><div class="books">' +
+        S.lists.books.map((b, i) => numInput('book_' + i, b, { req: true, int: true })).join('') + '</div>';
+    }
+    h += '<h2>Занятия и касса</h2>' +
+      numInput('students', 'Сколько человек пришли на обычные занятия', { req: true, int: true }) +
+      numInput('cashActual', 'Наличных в кассе сейчас (пересчитайте), ' + S.currency, { req: true }) +
+      '<div id="cashDiff" class="diff"></div>' +
+      area('problems', 'Проблемы за день', { rows: 3, placeholder: 'Если всё хорошо — оставьте пустым' }) +
+      area('comment', 'Комментарий', { rows: 2 }) +
+      '<button class="btn" type="submit">📤 Отправить отчёт</button></form>';
+    return h;
+  }
+  const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${esc(v)}</b></div>`;
+  function updateDiff() {
+    const el = document.getElementById('cashDiff');
+    const inp = $app.querySelector('[name=cashActual]');
+    if (!el || !inp) return;
+    const v = toNum(inp.value), exp = S.cash.expected;
+    if (v == null || exp == null) { el.textContent = ''; el.className = 'diff'; return; }
+    const d = Math.round((v - exp) * 100) / 100;
+    if (Math.abs(d) < 0.005) { el.textContent = '✅ Совпадает с ожидаемым'; el.className = 'diff ok'; }
+    else { el.textContent = '⚠️ Расхождение ' + (d > 0 ? '+' : '−') + money(Math.abs(d)) + ' — должно быть ' + money(exp); el.className = 'diff warn'; }
+  }
+
+  function vDone() {
+    return `<div class="card center-text"><div class="big-ic">${vd.sent ? '✅' : '⚠️'}</div><h1>${vd.sent ? 'Отчёт отправлен' : 'Отчёт сохранён'}</h1>
+      <div class="sub">${vd.sent ? 'Смена закрыта, отчёт ушёл в группу точки.' : 'Смена закрыта и записана в таблицу, но в группу отчёт не ушёл (' + esc(vd.reason || 'неизвестная ошибка') + '). Сообщите управляющему.'}</div></div>
+      <div class="card"><h2>Текст отчёта</h2><div class="preview">${esc(vd.preview || '')}</div></div>
+      <button class="btn" data-act="home" type="button">Готово</button>`;
+  }
+
+  const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+  function monthOptions() {
+    const [y, m] = S.today.split('-').map(Number);
+    const out = [];
+    for (let i = 0; i < 13; i++) {
+      let mm = m - i, yy = y;
+      while (mm <= 0) { mm += 12; yy--; }
+      out.push({ value: yy + '-' + pad(mm), label: MONTHS[mm - 1] + ' ' + yy });
+    }
+    return out;
+  }
+  function vSummary() {
+    const month = vd.month || S.today.slice(0, 7);
+    let h = head('Итоги месяца') + '<form class="card" data-submit="summary" novalidate>';
+    h += S.points.length > 1
+      ? '<div class="two">' + select('month', 'Месяц', monthOptions(), { req: true, value: month }) +
+        select('sumPoint', 'Точка', [{ value: 'all', label: 'Все точки' }].concat(S.points), { req: true, value: vd.point || 'all' }) + '</div>'
+      : select('month', 'Месяц', monthOptions(), { req: true, value: month });
+    h += '<button class="btn" type="submit">Показать</button></form>';
+    return h + (vd.summary ? renderSummary(vd.summary) : '');
+  }
+  function renderSummary(s) {
+    const pc = (v) => (v == null ? '—' : v + '%');
+    const gc = s.growth > 0 ? 'pos' : s.growth < 0 ? 'neg' : '';
+    let h = `<div class="kpis"><div class="kpi"><b>${s.sales.total}</b><span>купили</span></div><div class="kpi"><b>${s.cancels}</b><span>отменили</span></div>` +
+      `<div class="kpi"><b class="${gc}">${s.growth > 0 ? '+' : ''}${s.growth}</b><span>прирост</span></div></div>`;
+    h += '<div class="card"><h2>Продажи</h2>' + kv('После пробного', s.sales.afterTrial) + kv('Без пробного', s.sales.noTrial) + kv('Сумма', money(s.sales.sum)) + '</div>';
+    const t = s.trials;
+    h += '<div class="card"><h2>Пробные</h2>' + kv('Записали', t.booked) + kv('Было по расписанию', t.held) + kv('Пришли', t.came) + kv('Не пришли', t.noShow) +
+      (t.canceled ? kv('Отменили', t.canceled) : '') + (t.unmarked ? kv('Не отмечено', t.unmarked) : '') +
+      kv('Купили после пробного', t.sold) + kv('Конверсия', pc(t.conv)) + '</div>';
+    h += '<div class="card"><h2>Админы</h2>' + (s.admins.length
+      ? table(['Админ', 'Конв.', 'Пришли', 'Продал', 'Записал', 'Продаж', 'Часы', 'Сумма'],
+        s.admins.map((a) => [a.name, pc(a.conv), a.met, a.soldAfterTrial, a.booked, a.sales, fmtNum(a.hours), money(a.sum)])) +
+        '<div class="hint">Конверсия = продажи после пробного, оформленные админом ÷ пробные, где админ отметил «Пришёл».</div>'
+      : '<div class="sub">Нет данных</div>') + '</div>';
+    h += '<div class="card"><h2>Учителя</h2>' + (s.teachers.length
+      ? table(['Учитель', 'Пришли', 'Купили', 'Конв.'], s.teachers.map((x) => [x.name, x.came, x.sold, pc(x.conv)])) +
+        '<div class="hint">Для информации: из пришедших на пробное к учителю — сколько купили.</div>'
+      : '<div class="sub">Нет данных</div>') + '</div>';
+    return h + '<div class="hint center-text">Отмены считаются по листу «Отмены» (статус «Отменено»).</div>';
+  }
+  const table = (cols, rows) => '<div class="scroll"><table><thead><tr>' + cols.map((x, i) => `<th${i ? ' class="n"' : ''}>${esc(x)}</th>`).join('') +
+    '</tr></thead><tbody>' + rows.map((r) => '<tr>' + r.map((x, i) => `<td${i ? ' class="n"' : ''}>${esc(x)}</td>`).join('') + '</tr>').join('') + '</tbody></table></div>';
+
+  function screen(ic, title, html, retry) {
+    $app.innerHTML = `<div class="card center-text"><div class="big-ic">${ic}</div><h1>${esc(title)}</h1><div class="sub">${html}</div>` +
+      (retry ? '<button class="btn mt" data-act="retry" type="button">Повторить</button>' : '') + '</div>';
+  }
+  function showPending(d) {
+    screen('⏳', 'Заявка отправлена', 'Управляющий получил уведомление и откроет вам доступ в таблице.<div class="hint">Ваш Telegram ID: <b>' + esc(d.tgId) + '</b></div>', false);
+    $app.querySelector('.card').insertAdjacentHTML('beforeend', '<button class="btn mt" data-act="retry" type="button">Проверить снова</button>');
+  }
+
+  // ───────── события ─────────
+  $app.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-go],[data-act]');
+    if (!el || el.disabled) return;
+    if (el.dataset.go) { e.preventDefault(); openView(el.dataset.go, el.dataset.type ? { type: el.dataset.type } : {}); return; }
+    switch (el.dataset.act) {
+      case 'back': back(); break;
+      case 'home': go('home'); break;
+      case 'retry': boot(); break;
+      case 'startShift': run(el, () => api('startShift'), (d) => { toast(d.toast); render(); }); break;
+      case 'mark': run(el, () => api('markTrial', { id: el.dataset.id, status: el.dataset.status }), (d) => { toast(d.toast); vd.moving = null; render(); }); break;
+      case 'moveOpen': vd.moving = el.dataset.id; render(); break;
+      case 'moveCancel': vd.moving = null; render(); break;
+      case 'moveSave': {
+        const box = el.closest('.card');
+        const date = box.querySelector('[name=mdate]').value, time = box.querySelector('[name=mtime]').value;
+        if (!date || !time) { toast('Укажите новую дату и время', true); break; }
+        run(el, () => api('markTrial', { id: el.dataset.id, status: 'move', date, time }), (d) => { toast(d.toast); vd.moving = null; render(); });
+        break;
+      }
+      case 'saleMode': keep(); vd.mode = el.dataset.mode; render(); break;
+      case 'seg': {
+        const box = el.closest('.seg');
+        box.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el));
+        box.parentElement.querySelector('input[type=hidden]').value = el.dataset.value;
+        break;
+      }
+      default: break;
+    }
+  });
+
+  $app.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const btn = form.querySelector('[type=submit]');
+    if (busy || !validate(form)) return;
+    const v = formValues(form);
+    switch (form.dataset.submit) {
+      case 'addTrial': run(btn, () => api('addTrial', v), (d) => { toast(d.toast); go('home'); }); break;
+      case 'addSale': run(btn, () => api('addSale', v), (d) => { toast(d.toast); go('home'); }); break;
+      case 'addCash': run(btn, () => api('addCash', Object.assign(v, { type: vd.type })), (d) => { toast(d.toast); go('cash'); }); break;
+      case 'summary': run(btn, () => api('summary', { month: v.month, point: v.sumPoint || 'all' }), (d) => { vd = { month: v.month, point: v.sumPoint || 'all', summary: d.summary }; render(); }); break;
+      case 'closeShift': {
+        const books = {};
+        S.lists.books.forEach((b, i) => { books[b] = v['book_' + i]; });
+        const payload = { start: v.start, end: v.end, books, students: v.students, cashActual: v.cashActual, problems: v.problems, comment: v.comment };
+        if (S.stats.unmarked && !(await confirmBox('Не отмечено пробных: ' + S.stats.unmarked + '. Всё равно отправить отчёт?'))) return;
+        const exp = S.cash.expected, a = toNum(v.cashActual);
+        if (exp != null && a != null && Math.abs(a - exp) >= 0.005 &&
+          !(await confirmBox('Касса не сходится: ' + (a > exp ? '+' : '−') + money(Math.abs(a - exp)) + '. Отправить отчёт с расхождением?'))) return;
+        run(btn, () => api('closeShift', payload), (d) => go('done', d));
+        break;
+      }
+      default: break;
+    }
+  });
+
+  $app.addEventListener('change', (e) => {
+    const t = e.target;
+    const f = t.closest('.field');
+    if (f) f.classList.remove('err');
+    if (t.name === 'homePoint') {
+      const prev = S.point;
+      S.point = t.value;
+      run(null, () => api('init'), () => render()).then(() => { if (S && S.point !== t.value) { S.point = prev; render(); } });
+    } else if (t.name === 'instrument') {
+      const box = document.getElementById('teacherBox');
+      const cur = box && box.querySelector('[name=teacher]') ? box.querySelector('[name=teacher]').value : '';
+      if (box) box.innerHTML = teacherSelect(t.value, cur);
+    } else if (t.name === 'subscription') {
+      const s = S.subs.find((x) => x.name === t.value);
+      const amt = t.form && t.form.elements.amount;
+      if (s && s.price != null && amt && (!amt.value || amt.dataset.auto === '1')) { amt.value = s.price; amt.dataset.auto = '1'; }
+    } else if (t.name === 'trialId') {
+      updateTrialInfo();
+    }
+  });
+
+  $app.addEventListener('input', (e) => {
+    const t = e.target;
+    const f = t.closest('.field');
+    if (f) f.classList.remove('err');
+    if (t.name === 'amount') t.dataset.auto = '0';
+    if (t.name === 'cashActual') updateDiff();
+  });
+
+  setInterval(() => {
+    if (view !== 'home' || !S || !S.shift.open || S.shift.stale) return;
+    const el = $app.querySelector('[data-tick]');
+    if (el) el.textContent = dur(Math.max(0, Math.round((Date.now() - S.shift.startTs) / 60000))) + (S.points.length > 1 ? '' : ' · ' + S.point);
+  }, 30000);
+
+  // ───────── запуск ─────────
+  async function boot() {
+    if (tg) {
+      try { tg.ready(); tg.expand(); } catch (e) { /* ignore */ }
+      if (inTg && !backBound) {
+        backBound = true;
+        try { tg.BackButton.onClick(back); } catch (e) { /* старый клиент */ }
+        try { tg.setHeaderColor('secondary_bg_color'); tg.setBackgroundColor('secondary_bg_color'); } catch (e) { /* старый клиент */ }
+      }
+    }
+    if (!tg || !tg.initData) {
+      screen('📱', 'Откройте через Telegram', 'Это приложение работает внутри Telegram: откройте бота школы и нажмите кнопку «Отчёты» внизу чата.');
+      return;
+    }
+    if (/^PASTE_/.test(API_URL)) {
+      screen('⚙️', 'Не указан адрес сервера', 'Вставьте адрес веб-приложения Apps Script в начало файла index.html (строка API_URL).');
+      return;
+    }
+    $app.innerHTML = '<div class="center"><div class="spinner"></div></div>';
+    try {
+      await api('init');
+      go('home');
+    } catch (e) {
+      if (!e.silent) screen('😕', 'Не получилось загрузить', esc(e.message), true);
+    }
+  }
+  boot();
+})();
+</script>
+</body>
+</html>
