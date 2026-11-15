@@ -91,13 +91,15 @@
 
   .seg { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--soft); margin: 0 0 14px; }
   .seg button { flex: 1; min-height: 38px; border: 0; border-radius: 9px; background: transparent; color: var(--text); font: inherit; font-size: 15px; padding: 6px 8px; cursor: pointer; }
+  .seg.wrap { flex-wrap: wrap; }
+  .seg.wrap button { flex: 1 1 45%; }
   .seg button.on { background: var(--card); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
 
   .note { background: var(--soft); border-radius: 12px; padding: 12px; font-size: 14px; margin: 0 0 14px; line-height: 1.4; }
   .kv { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 0; border-top: 1px solid var(--sep); }
   .card > .kv:first-child, h2 + .kv { border-top: 0; padding-top: 0; }
   .kv span { color: var(--hint); }
-  .kv b { text-align: right; font-variant-numeric: tabular-nums; }
+  .kv b { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--sep); }
   h2 + .item, .item:first-child { border-top: 0; padding-top: 0; }
   .item b { white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -125,6 +127,8 @@
   .preview { white-space: pre-wrap; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
 
   .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 0 0 12px; }
+  .kpis.two-k { grid-template-columns: 1fr 1fr; }
+  .grid.mgr .tile { min-height: 84px; }
   .kpis.four { grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .kpi { background: var(--card); border-radius: 16px; padding: 14px 6px; text-align: center; }
   .kpi b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
@@ -166,6 +170,14 @@
   .script .t { font-weight: 600; }
   .script .txt { white-space: pre-wrap; margin: 10px 0 0; font-size: 15px; line-height: 1.5; }
 
+  .task-row { display: flex; gap: 12px; align-items: flex-start; }
+  .tick { flex: none; width: 28px; height: 28px; margin-top: 1px; border-radius: 50%; border: 2px solid var(--hint); background: transparent; color: #fff; font-weight: 700; font-size: 15px; line-height: 1; cursor: pointer; }
+  .tick.on { background: var(--ok); border-color: var(--ok); }
+  .task-body { flex: 1; min-width: 0; }
+  .task-t { font-weight: 600; overflow-wrap: anywhere; }
+  .task.done .task-t { text-decoration: line-through; color: var(--hint); }
+  .task-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
+  .group-h { margin: 18px 4px 8px; }
   .link { display: block; background: none; border: 0; padding: 12px 0 0; color: var(--link); font: inherit; cursor: pointer; }
   .back { background: none; border: 0; padding: 0 0 10px; color: var(--link); font: inherit; cursor: pointer; }
   .center { display: flex; justify-content: center; padding: 96px 0; }
@@ -285,12 +297,12 @@
   // ───────── навигация ─────────
   const VIEWS = {
     home: vHome, start: vStart, shiftTime: vShiftTime, cabinet: vCabinet, trials: vTrials, trialForm: vTrialForm,
-    followups: vFollowups, cash: vCash, cashForm: vCashForm, books: vBooks, bookIn: vBookIn, bookSet: vBookSet,
+    followups: vFollowups, history: vHistory, hours: vHours, tasks: vTasks, taskForm: vTaskForm, cash: vCash, cashForm: vCashForm, books: vBooks, bookIn: vBookIn, bookSet: vBookSet,
     scripts: vScripts, close: vClose, done: vDone, day: vDay, summary: vSummary,
   };
-  const PARENT = { cashForm: 'cash', bookIn: 'books', bookSet: 'books', trialForm: 'trials' };
-  const FRESH = { close: true, followups: true, cash: true, trials: true, cabinet: true };
-  const MANAGER_ONLY = { day: true, summary: true, bookSet: true };
+  const PARENT = { cashForm: 'cash', bookIn: 'books', bookSet: 'books', trialForm: 'trials', taskForm: 'tasks' };
+  const FRESH = { close: true, followups: true, cash: true, trials: true, cabinet: true, tasks: true };
+  const MANAGER_ONLY = { day: true, summary: true, bookSet: true, hours: true };
 
   function go(v, data) {
     if (MANAGER_ONLY[v] && !S.user.isManager) v = 'home';
@@ -300,6 +312,9 @@
     window.scrollTo(0, 0);
   }
   function openView(v, data) {
+    const month = S.today.slice(0, 7);
+    if (v === 'history') { run(null, () => api('history', { month, who: 'all' }), (d) => go('history', { history: d.history, month, who: d.history.who })); return; }
+    if (v === 'hours') { run(null, () => api('hours', { month, point: 'all' }), (d) => go('hours', { hours: d.hours, month, point: 'all' })); return; }
     if (FRESH[v]) run(null, () => api('init'), () => go(v, data));
     else go(v, data);
   }
@@ -462,6 +477,15 @@
     return h + '</div>';
   }
 
+  // ───────── часы работы ─────────
+  function fmtH(h) { const m = Math.round((h || 0) * 60); const hh = Math.floor(m / 60), mm = m % 60; return hh + ' ч' + (mm ? ' ' + mm + ' мин' : ''); }
+  function liveHours() {
+    const H = S.hours;
+    const el = H.openStartTs ? Math.min(16, Math.max(0, (Date.now() - H.openStartTs) / 36e5)) : 0;
+    return { today: H.today + (H.openToday ? el : 0), month: H.month + el };
+  }
+  const hoursText = () => { const L = liveHours(); return '⏱ Сегодня отработано: ' + fmtH(L.today) + ' · за ' + S.hours.monthLabel + ': ' + fmtH(L.month); };
+
   // ───────── экраны ─────────
   function vHome() {
     const sh = S.shift, u = S.user, c = S.cabinet;
@@ -478,9 +502,12 @@
       h += `<div class="card shift"><div class="shift-row"><span class="dot${sh.stale ? ' warn' : ''}"></span><div>
         <div class="t">Смена с ${esc(sh.start)}${sh.plannedEnd ? ' до ' + esc(sh.plannedEnd) : ''}${sh.stale ? ' (' + esc(sh.startDay) + ')' : ''}</div>
         <div class="sub" data-tick>${sh.stale ? 'Смена не закрыта — закройте её' : dur(mins) + where}</div></div></div>
+        <div class="hint" data-hours>${esc(hoursText())}</div>
         <button class="btn ghost small mt" data-go="shiftTime" type="button">🕐 Изменить время начала или конца</button></div>`;
     } else {
+      const L0 = liveHours();
       h += `<div class="card shift"><div class="t">Смена не начата</div><div class="sub">Нажмите, когда пришли на работу${where}</div>
+        ${!u.isManager || L0.month ? `<div class="hint" data-hours>${esc(hoursText())}</div>` : ''}
         <button class="btn mt" data-go="start" type="button">▶️ Начать смену</button></div>`;
     }
     if (!u.isManager || c.month.came) {
@@ -496,11 +523,15 @@
       tile('books', '📚', 'Книги', booksHint()) +
       tile('followups', '🔔', 'Напоминания', S.followUps.length ? 'ждут звонка: ' + S.followUps.length : 'никого не ждём', due) +
       '</div>';
+    const urgent = S.tasks.filter((t) => !t.done && t.mine && (t.overdue || t.today)).length;
+    h += `<button class="wide" data-go="tasks" type="button"><span class="ic">📌</span><span><span class="t">Задачи</span><br><span class="sub">${esc(tasksHint())}</span></span>${urgent ? `<span class="badge" style="position:static;margin-left:auto">${urgent}</span>` : '<span class="chev">›</span>'}</button>`;
     h += `<button class="wide" data-go="scripts" type="button"><span class="ic">💬</span><span><span class="t">Скрипты продаж</span><br><span class="sub">быстрый поиск: ${S.scripts.length}</span></span><span class="chev">›</span></button>`;
+    if (!u.isManager) h += `<button class="wide" data-go="history" type="button"><span class="ic">🗂</span><span><span class="t">Мои отчёты и часы</span><br><span class="sub">история всех смен</span></span><span class="chev">›</span></button>`;
     h += `<button class="btn${sh.open ? '' : ' ghost'}" data-go="close" type="button">🏁 ${sh.open ? 'Закрыть смену и отправить отчёт' : 'Заполнить отчёт за день'}</button>`;
     if (u.isManager) {
-      h += '<div class="row-btns"><button class="btn ghost" data-go="day" type="button">📅 Отчёты по дням</button>' +
-        '<button class="btn ghost" data-go="summary" type="button">📊 Итоги месяца</button></div>';
+      h += '<div class="grid mgr" style="margin-top:12px">' + tile('day', '📅', 'Отчёты по дням', 'все за выбранный день') +
+        tile('history', '🗂', 'История отчётов', 'каждого сотрудника') + tile('hours', '⏱', 'Часы работы', 'по дням и неделям') +
+        tile('summary', '📊', 'Итоги месяца', 'продажи и бонусы') + '</div>';
     }
     return h;
   }
@@ -575,6 +606,7 @@
     return h + S.trialsToday.map((t) => `<div class="card entry">
       <div class="top"><div class="name">${esc(t.teacher)}</div><div class="sub">${esc(t.time)} · ${esc(t.admin)}</div></div>
       <div class="nums">Пришли <b>${t.came}</b> · купили <b class="pos">${t.bought}</b> · не купили <b>${t.came - t.bought}</b></div>
+      ${t.buyers.length ? '<ul class="nblist">' + t.buyers.map((b) => `<li>✅ <b>${esc(b.client)}</b> — ${esc(b.subscription)}${b.paid > 0 ? ' · ' + money(b.paid) + ' (' + esc(String(b.payment).toLowerCase()) + ')' : ' · на месте не оплатил(а)'}</li>`).join('') + '</ul>' : ''}
       ${t.nonBuyers.length ? '<ul class="nblist">' + t.nonBuyers.map((n) => `<li>❌ <b>${esc(n.client)}</b> — ${esc(n.reason)}${n.comment ? ', ' + esc(n.comment) : ''}${n.remind ? ' · 🔔 ' + esc(n.remindAt) : ''}${n.status === 'Купил позже' ? ' · ✅ купил позже' : ''}</li>`).join('') + '</ul>' : ''}
       ${t.comment ? `<div class="hint">💬 ${esc(t.comment)}</div>` : ''}
       ${t.editable ? `<div class="row-btns"><button class="btn ghost small" type="button" data-act="editTrial" data-id="${esc(t.id)}">✏️ Изменить</button><button class="btn bad small" type="button" data-act="del" data-kind="trial" data-id="${esc(t.id)}">🗑 Удалить</button></div>` : ''}
@@ -584,12 +616,13 @@
   function vTrialForm() {
     const e = vd.edit;
     if (!vd.nb) vd.nb = e ? e.nonBuyers.map((n) => Object.assign({}, n)) : [];
+    if (!vd.by) vd.by = e ? e.buyers.map((b) => Object.assign({}, b)) : [];
     if (!vd.values) vd.values = e ? { teacher: e.teacher, came: String(e.came), bought: String(e.bought), comment: e.comment } : {};
     const teacherField = S.teachers.length ? select('teacher', 'Учитель', S.teachers, { req: true }) : input('teacher', 'Учитель', { req: true });
     return head(e ? 'Исправить итоги пробного' : 'Итоги пробного', esc(S.point)) +
       `<form class="card" data-submit="saveTrial" novalidate>${teacherField}
       <div class="two">${numInput('came', 'Пришли на пробное', { req: true, int: true })}${numInput('bought', 'Из них купили', { req: true, int: true })}</div>
-      <div id="nbBox">${nbBlocks()}</div>
+      <div id="byBox">${byBlocks()}</div><div id="nbBox">${nbBlocks()}</div>
       ${area('comment', 'Комментарий', { rows: 2 })}
       ${e ? '<div class="note">Исправление увидит управляющий: что было и что стало.</div>' : ''}
       <button class="btn" type="submit">${e ? 'Сохранить исправление' : 'Сохранить'}</button></form>`;
@@ -608,7 +641,7 @@
     const tomorrow = addDays(S.today, 1);
     return `<h2>Кто не купил — ${n}</h2>` + Array.from({ length: n }, (_, i) => {
       const v = vd.nb[i] || {};
-      return `<div class="nb" data-i="${i}" data-id="${esc(v.id || '')}"><div class="nb-h">❌ Не купил(а) №${i + 1}</div>
+      return `<div class="nb no" data-i="${i}" data-id="${esc(v.id || '')}"><div class="nb-h">❌ Не купил(а) №${i + 1}</div>
         ${input('nb_client_' + i, 'Имя клиента', { req: true, raw: true, value: v.client, placeholder: 'Как в Opus1' })}
         ${select('nb_reason_' + i, 'Причина', S.lists.reasons, { req: true, raw: true, value: v.reason })}
         ${area('nb_comment_' + i, 'Комментарий', { rows: 2, raw: true, value: v.comment, placeholder: 'Что сказал(а), о чём договорились' })}
@@ -620,7 +653,7 @@
     }).join('');
   }
   function collectNB() {
-    return Array.from($app.querySelectorAll('.nb')).map((b) => {
+    return Array.from($app.querySelectorAll('.nb.no')).map((b) => {
       const i = b.dataset.i;
       const q = (n) => b.querySelector(`[name="${n}_${i}"]`);
       return {
@@ -631,15 +664,51 @@
   }
   function refreshNB() {
     const box = document.getElementById('nbBox');
+    const bbox = document.getElementById('byBox');
     const form = $app.querySelector('form');
-    if (!box || !form) return;
+    if (!box || !bbox || !form) return;
     collectNB().forEach((v, i) => { vd.nb[i] = v; });
+    collectBuyers().forEach((v, i) => { vd.by[i] = v; });
     vd.values = Object.assign(vd.values || {}, { came: form.elements.came.value, bought: form.elements.bought.value });
-    const n = nbNeed();
     const came = toNum(vd.values.came), bought = toNum(vd.values.bought);
     const invalid = came != null && bought != null && bought > came;
-    if (n === vd.nbCount && !invalid && !box.querySelector('.note')) return;
-    box.innerHTML = nbBlocks();
+    if (byNeed() !== vd.byCount) bbox.innerHTML = byBlocks();
+    if (nbNeed() !== vd.nbCount || invalid || box.querySelector('.note')) box.innerHTML = nbBlocks();
+  }
+  function byNeed() {
+    const came = toNum(val('came', '')), bought = toNum(val('bought', ''));
+    if (bought == null || bought < 0 || (came != null && bought > came)) return 0;
+    return Math.floor(bought);
+  }
+  const subOptions = () => S.subs.map((s) => ({ value: s.name, label: s.name + (s.price != null ? ' — ' + money(s.price) : '') }));
+  function subField(name, value) {
+    return S.subs.length ? select(name, 'Абонемент', subOptions(), { req: true, raw: true, value })
+      : input(name, 'Абонемент', { req: true, raw: true, value, hint: 'Список абонементов — в листе «Абонементы»' });
+  }
+  function payField(name, cur) {
+    const pay = cur || S.lists.payments[0];
+    return `<div class="field"><span class="lbl">Как оплатил(а)</span><div class="seg wrap">${S.lists.payments.map((x) =>
+      `<button type="button" data-act="pay" data-value="${esc(x)}" class="${x === pay ? 'on' : ''}">${esc(x)}</button>`).join('')}</div><input type="hidden" name="${name}" value="${esc(pay)}"></div>`;
+  }
+  function byBlocks() {
+    const n = byNeed();
+    vd.byCount = n;
+    if (!n) return '';
+    return `<h2>Кто купил — ${n}</h2>` + Array.from({ length: n }, (_, i) => {
+      const v = vd.by[i] || {};
+      return `<div class="nb by" data-i="${i}" data-id="${esc(v.id || '')}"><div class="nb-h">✅ Купил(а) №${i + 1}</div>
+        ${input('by_client_' + i, 'Имя клиента', { req: true, raw: true, value: v.client, placeholder: 'Как в Opus1' })}
+        ${subField('by_sub_' + i, v.subscription)}
+        ${numInput('by_paid_' + i, 'Оплатил(а) на месте, ' + S.currency, { req: true, raw: true, value: v.paid == null ? '' : String(v.paid), hint: 'Если на месте не платил(а) — 0' })}
+        ${payField('by_pay_' + i, v.payment)}</div>`;
+    }).join('');
+  }
+  function collectBuyers() {
+    return Array.from($app.querySelectorAll('.nb.by')).map((b) => {
+      const i = b.dataset.i;
+      const q = (n) => b.querySelector(`[name="${n}_${i}"]`);
+      return { id: b.dataset.id || '', client: q('by_client').value, subscription: q('by_sub').value, paid: q('by_paid').value, payment: q('by_pay').value };
+    });
   }
 
   // ── напоминания о клиентах
@@ -651,12 +720,115 @@
       <div class="top"><div class="name">${esc(f.client)}</div>${f.due ? '<span class="chip due">пора звонить</span>' : `<span class="chip wait">🔔 ${esc(f.remindAt)}</span>`}</div>
       <div class="sub">Учитель: ${esc(f.teacher)} · ${esc(f.reason)}${f.comment ? ' — ' + esc(f.comment) : ''}</div>
       <div class="hint">${f.due ? 'Напоминание было ' + esc(f.remindAt) + ' · ' : ''}записал(а): ${esc(f.admin)}${S.user.isManager && S.points.length > 1 ? ' · ' + esc(f.point) : ''} · контакты в Opus1</div>
-      ${vd.moving === f.id ? `<div class="mt"><div class="two">${input('mdate', 'Новая дата', { type: 'date', req: true, raw: true, value: addDays(S.today, 1) })}${input('mtime', 'Время', { type: 'time', req: true, raw: true })}</div>
+      ${vd.buying === f.id ? buyForm(f) : vd.moving === f.id ? `<div class="mt"><div class="two">${input('mdate', 'Новая дата', { type: 'date', req: true, raw: true, value: addDays(S.today, 1) })}${input('mtime', 'Время', { type: 'time', req: true, raw: true })}</div>
         <div class="two"><button class="btn small ghost" type="button" data-act="moveCancel">Отмена</button><button class="btn small" type="button" data-act="moveSave" data-id="${esc(f.id)}">Перенести</button></div></div>`
-      : `<div class="row-btns"><button class="btn small ok" type="button" data-act="fu" data-do="bought" data-id="${esc(f.id)}">✅ Купил</button>
+      : `<div class="row-btns"><button class="btn small ok" type="button" data-act="buyOpen" data-id="${esc(f.id)}">✅ Купил</button>
         <button class="btn small bad" type="button" data-act="fu" data-do="no" data-id="${esc(f.id)}">Не купит</button>
         <button class="btn small ghost" type="button" data-act="moveOpen" data-id="${esc(f.id)}">⏰</button></div>`}
     </div>`).join('');
+  }
+
+  function buyForm(f) {
+    return `<div class="mt fb">${subField('fb_sub', '')}
+      ${numInput('fb_paid', 'Оплатил(а) на месте, ' + S.currency, { req: true, raw: true, hint: 'Если оплатит позже — 0' })}
+      ${payField('fb_pay', '')}
+      <div class="two"><button class="btn small ghost" type="button" data-act="buyCancel">Отмена</button><button class="btn small ok" type="button" data-act="buySave" data-id="${esc(f.id)}">Сохранить покупку</button></div></div>`;
+  }
+
+  // ── история отчётов
+  function vHistory() {
+    const isM = S.user.isManager;
+    const r = vd.history;
+    let h = head(isM ? 'История отчётов' : 'Мои отчёты и часы');
+    if (!isM) {
+      const L = liveHours();
+      h += `<div class="kpis two-k"><div class="kpi"><b data-h-today>${fmtH(L.today)}</b><span>отработано сегодня</span></div>` +
+        `<div class="kpi"><b data-h-month>${fmtH(L.month)}</b><span>за ${esc(S.hours.monthLabel)} к сегодня</span></div></div>` +
+        '<div class="hint center-text" style="margin:-4px 0 12px">Счётчик месяца обнуляется 1-го числа. История за все месяцы сохраняется.</div>';
+    }
+    h += '<form class="card" data-submit="history" novalidate>' + (isM ? '<div class="two">' : '') +
+      select('hMonth', 'Месяц', monthOptions(), { req: true, raw: true, value: vd.month || S.today.slice(0, 7) }) +
+      (isM ? select('hWho', 'Сотрудник', [{ value: 'all', label: 'Все' }].concat(S.people), { req: true, raw: true, value: vd.who || 'all' }) + '</div>' : '') +
+      '<button class="btn" type="submit">Показать</button></form>';
+    if (!r) return h;
+    h += '<div class="card">' + kv((isM ? r.whoName + ' · ' : '') + 'отработано за ' + r.label + (r.isCurrent ? ' (к сегодня)' : ''), fmtH(r.total)) +
+      kv('Смен', r.count) + kv('Рабочих дней', r.days) + '</div>';
+    if (r.weeks.length) h += '<div class="card"><h2>По неделям (пн–вс)</h2>' + r.weeks.map((w) => kv(w.label, fmtH(w.hours))).join('') + '</div>';
+    if (!r.shifts.length) return h + '<div class="card empty">В этом месяце смен нет</div>';
+    return h + r.shifts.map((s, i) => `<div class="card entry"><div class="top"><div class="name">${esc(s.date)}</div>${s.closed ? `<b>${fmtH(s.hours)}</b>` : '<span class="chip wait">смена идёт</span>'}</div>
+      <div class="sub">${isM ? esc(s.admin) + ' · ' : ''}${esc(s.point)} · ${esc(s.start)}–${esc(s.closed ? s.end : (s.plannedEnd || '…'))}${s.edited ? ' · ✏️ время исправлено' : ''}</div>
+      ${s.closed ? (vd.openRep === i ? `<div class="preview mt">${esc(s.report)}</div><button class="link" type="button" data-act="rep" data-i="${i}">Скрыть отчёт</button>`
+        : `<button class="link" type="button" data-act="rep" data-i="${i}">Показать отчёт ›</button>`) : `<div class="hint">Пока отработано: ${fmtH(s.hours)}</div>`}</div>`).join('');
+  }
+
+  // ── часы работы (управляющий)
+  function vHours() {
+    const r = vd.hours;
+    let h = head('Часы работы') + '<form class="card" data-submit="hours" novalidate>' + (S.points.length > 1 ? '<div class="two">' : '') +
+      select('hrMonth', 'Месяц', monthOptions(), { req: true, raw: true, value: vd.month || S.today.slice(0, 7) }) +
+      (S.points.length > 1 ? pointSelect('hrPoint', vd.point) + '</div>' : '') + '<button class="btn" type="submit">Показать</button></form>';
+    if (!r) return h;
+    if (!r.admins.length) return h + '<div class="card empty">В этом месяце смен нет</div>';
+    const fh = (x) => (x ? fmtNum(x) : '—');
+    const short = (a) => a.name.split(' ')[0];
+    const tot = (key, field) => r.admins.reduce((s, a) => s + (a[field][key] || 0), 0);
+    h += `<div class="card"><h2>${r.isCurrent ? 'К сегодняшнему дню' : 'За ' + esc(r.label)}</h2>` +
+      table(r.isCurrent ? ['Сотрудник', 'Сегодня', 'Неделя', 'Месяц'] : ['Сотрудник', 'Месяц'],
+        r.admins.map((a) => (r.isCurrent ? [a.name + (a.open ? ' ⏳' : ''), fh(a.today), fh(a.week), fh(a.total)] : [a.name, fh(a.total)]))) +
+      '<div class="hint">Часы десятичные: 7,5 = 7 ч 30 мин. ⏳ — смена ещё идёт, часы посчитаны на сейчас.</div></div>';
+    h += '<div class="card"><h2>По неделям (пн–вс)</h2>' + table(['Неделя'].concat(r.admins.map(short), ['Всего']),
+      r.weeks.map((w) => [w.label].concat(r.admins.map((a) => fh(a.perWeek[w.key])), [fh(tot(w.key, 'perWeek'))]))) + '</div>';
+    h += '<div class="card"><h2>По дням</h2>' + table(['День'].concat(r.admins.map(short), ['Всего']),
+      r.days.map((d) => [d.label].concat(r.admins.map((a) => fh(a.perDay[d.key])), [fh(tot(d.key, 'perDay'))]))) + '</div>';
+    return h;
+  }
+
+  // ── задачи
+  function tasksHint() {
+    const mine = S.tasks.filter((t) => !t.done && t.mine);
+    const over = mine.filter((t) => t.overdue).length, today = mine.filter((t) => t.today && !t.overdue).length;
+    if (over) return 'просрочено: ' + over + (today ? ' · на сегодня: ' + today : '');
+    if (today) return 'на сегодня: ' + today;
+    return mine.length ? 'открытых: ' + mine.length : 'открытых задач нет';
+  }
+  function taskCard(t) {
+    const dueCls = t.done ? '' : t.overdue ? 'due' : t.today ? 'wait' : '';
+    return `<div class="card task${t.done ? ' done' : ''}"><div class="task-row">
+      <button class="tick${t.done ? ' on' : ''}" type="button" data-act="taskDone" data-id="${esc(t.id)}" data-done="${t.done ? '0' : '1'}" aria-label="${t.done ? 'Вернуть в работу' : 'Отметить выполненной'}">${t.done ? '✓' : ''}</button>
+      <div class="task-body"><div class="task-t">${esc(t.title)}</div>
+        ${t.description ? `<div class="sub" style="white-space:pre-wrap">${esc(t.description)}</div>` : ''}
+        <div class="task-meta">${t.due ? `<span class="chip ${dueCls}">🗓 до ${esc(t.due)}</span>` : ''}<span class="chip">→ ${esc(t.assignee)}</span>
+          ${t.done ? `<span class="chip won">выполнил(а): ${esc(t.doneBy)}</span>` : `<span class="hint" style="margin:0">от ${esc(t.author)}</span>`}</div>
+        ${t.canEdit ? `<div class="row-btns" style="margin-top:10px"><button class="btn ghost small" type="button" data-act="editTask" data-id="${esc(t.id)}">✏️ Изменить</button><button class="btn bad small" type="button" data-act="delTask" data-id="${esc(t.id)}">🗑 Удалить</button></div>` : ''}
+      </div></div></div>`;
+  }
+  function vTasks() {
+    const f = vd.filter || 'mine';
+    const list = S.tasks.filter((t) => f === 'mine' ? t.mine : f === 'byme' ? t.author === S.user.name : true);
+    let h = head('Задачи') + '<button class="btn" data-go="taskForm" type="button">＋ Новая задача</button><div style="height:12px"></div>';
+    h += segButtons('tfilter', [['mine', 'Мои'], ['byme', 'От меня'], ['all', 'Все']], f);
+    const open = list.filter((t) => !t.done);
+    const groups = [
+      ['⚠️ Просрочено', open.filter((t) => t.overdue)],
+      ['📅 Сегодня', open.filter((t) => t.today && !t.overdue)],
+      ['🗓 Позже', open.filter((t) => t.due && !t.today && !t.overdue)],
+      ['📝 Без срока', open.filter((t) => !t.due)],
+      ['✅ Выполнено за неделю', list.filter((t) => t.done)],
+    ];
+    if (!list.length) return h + '<div class="card empty">Задач нет 🎉<div class="hint">Нажмите «Новая задача», чтобы поставить задачу себе, коллеге или всей точке.</div></div>';
+    groups.forEach(([title, items]) => { if (items.length) h += `<h2 class="group-h">${title} · ${items.length}</h2>` + items.map(taskCard).join(''); });
+    return h;
+  }
+  function vTaskForm() {
+    const e = vd.edit;
+    if (!vd.values) vd.values = e ? { title: e.title, description: e.description, assignee: e.assigneeValue, dueDate: e.dueDate, dueTime: e.dueTime } : { assignee: 'me' };
+    return head(e ? 'Изменить задачу' : 'Новая задача') + '<form class="card" data-submit="saveTask" novalidate>' +
+      input('title', 'Что нужно сделать', { req: true, placeholder: 'Например: заказать книги по гитаре' }) +
+      area('description', 'Подробности', { rows: 3 }) +
+      select('assignee', 'Кому', S.staff, { req: true }) +
+      '<div class="two">' + input('dueDate', 'Срок — дата', { type: 'date' }) + input('dueTime', 'до времени', { type: 'time' }) + '</div>' +
+      '<div class="note">Без даты — задача без срока. Без времени — до конца дня, бот напомнит в 9:00. Со временем — бот напомнит ровно в срок.</div>' +
+      `<button class="btn" type="submit">${e ? 'Сохранить' : 'Поставить задачу'}</button></form>`;
   }
 
   // ── касса
@@ -670,7 +842,7 @@
       '<button class="btn bad" data-go="cashForm" data-type="out" type="button">− Расход</button></div>';
     h += '<div class="card"><h2>С последнего пересчёта</h2>';
     h += c.moves.length ? c.moves.slice().reverse().map((m) => `<div class="item"><div style="min-width:0"><div>${esc(m.category)}${m.comment ? ` <span class="sub">· ${esc(m.comment)}</span>` : ''}</div>
-      <div class="hint">${esc(m.time)} · ${esc(m.admin)}</div></div><div style="text-align:right"><b class="${m.type === 'Расход' ? 'neg' : 'pos'}">${m.type === 'Расход' ? '−' : '+'}${money(m.amount)}</b>
+      <div class="hint">${esc(m.time)} · ${esc(m.admin)}${m.fromSale ? ' · из продажи' : ''}</div></div><div style="text-align:right"><b class="${m.type === 'Расход' ? 'neg' : 'pos'}">${m.type === 'Расход' ? '−' : '+'}${money(m.amount)}</b>
       ${m.editable ? `<div class="acts" style="margin-top:6px"><button class="icon-btn" type="button" data-act="editCash" data-id="${esc(m.id)}" aria-label="Изменить">✏️</button><button class="icon-btn del" type="button" data-act="del" data-kind="cash" data-id="${esc(m.id)}" aria-label="Удалить">🗑</button></div>` : ''}</div></div>`).join('')
       : '<div class="sub">Движений не было</div>';
     if (c.base != null) h += `<div class="item"><div class="sub">Было на начало</div><b>${money(c.base)}</b></div>`;
@@ -824,7 +996,7 @@
     const d = vd.day;
     if (!d) return h;
     h += `<div class="sub" style="margin:0 4px 10px">${esc(d.label)}</div>`;
-    h += `<div class="kpis"><div class="kpi"><b>${d.came}</b><span>пришли на пробное</span></div><div class="kpi"><b>${d.bought}</b><span>купили</span></div><div class="kpi"><b>${d.registrations}</b><span>регистраций</span></div></div>`;
+    h += `<div class="kpis"><div class="kpi"><b>${d.came}</b><span>пришли на пробное</span></div><div class="kpi"><b>${d.bought}</b><span>купили</span></div><div class="kpi"><b>${d.registrations}</b><span>регистраций</span></div></div><div class="hint center-text" style="margin:-4px 0 12px">Оплачено на месте: ${money(d.paid)}</div>`;
     if (!d.shifts.length) return h + '<div class="card empty">В этот день смен не было</div>';
     return h + d.shifts.map((s) => `<div class="card"><div class="entry"><div class="top"><div class="name">${esc(s.admin)}</div>
       <span class="chip ${s.closed ? 'won' : 'wait'}">${s.closed ? 'отчёт отправлен' : 'смена идёт'}</span></div>
@@ -858,13 +1030,14 @@
     let h = `<div class="kpis"><div class="kpi"><b>${s.total}</b><span>купили</span></div><div class="kpi"><b>${s.cancels}</b><span>отменили</span></div>` +
       `<div class="kpi"><b class="${gc}">${s.growth > 0 ? '+' : ''}${s.growth}</b><span>прирост</span></div></div>`;
     h += '<div class="card"><h2>Пробные и продажи</h2>' + kv('Регистраций на пробное', s.registrations) + kv('Пришли на пробное', s.came) +
-      kv('Купили сразу', s.boughtNow) + kv('Купили после звонка', s.late) + kv('Купили без пробного', s.noTrial) +
+      kv('Купили сразу', s.boughtNow) + kv('Купили после звонка', s.late) + kv('Купили без пробного', s.noTrial) + kv('Оплачено на месте', money(s.paid)) +
       kv('Конверсия пробных', pct(s.conv) + (s.plan != null ? ' (план ' + s.plan + '%)' : '')) + kv('Ждут звонка', s.waiting) + '</div>';
     h += '<div class="card"><h2>Админы и бонусы</h2>' + (s.admins.length
-      ? table(['Админ', 'Конв.', 'Бонус', 'Пришли', 'Купили', 'Регистр.', 'Смен', 'Часы'],
-        s.admins.map((a) => [a.name, pct(a.conv), a.bonus ? money(a.bonus) : '—', a.came, a.bought, a.registrations, a.shifts, fmtNum(a.hours)])) +
+      ? table(['Админ', 'Конв.', 'Бонус', 'Пришли', 'Купили', 'Оплачено', 'Регистр.', 'Смен', 'Часы'],
+        s.admins.map((a) => [a.name, pct(a.conv), a.bonus ? money(a.bonus) : '—', a.came, a.bought, money(a.paid), a.registrations, a.shifts, fmtNum(a.hours)])) +
         '<div class="hint">Конверсия = купили (сразу и после звонка) ÷ пришли на пробное в смены админа. Бонус — по шкале в листе «Бонусы».</div>'
       : '<div class="sub">Нет данных</div>') + '</div>';
+    if (s.subscriptions && s.subscriptions.length) h += '<div class="card"><h2>Какие абонементы покупают</h2>' + s.subscriptions.map((x) => kv(x.name, x.count)).join('') + '</div>';
     if (s.reasons.length) h += '<div class="card"><h2>Почему не купили</h2>' + s.reasons.map((r) => kv(r.reason, r.count)).join('') + '</div>';
     h += '<div class="card"><h2>Учителя</h2>' + (s.teachers.length
       ? table(['Учитель', 'Конв.', 'Пришли', 'Купили'], s.teachers.map((x) => [x.name, pct(x.conv), x.came, x.bought]))
@@ -893,6 +1066,31 @@
       case 'home': go('home'); break;
       case 'retry': boot(); break;
       case 'period': vd.period = el.dataset.value; render(); break;
+      case 'tfilter': vd.filter = el.dataset.value; render(); break;
+      case 'rep': { const i = Number(el.dataset.i); vd.openRep = vd.openRep === i ? null : i; render(); break; }
+      case 'pay': {
+        const box = el.closest('.seg');
+        box.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el));
+        el.closest('.field').querySelector('input[type=hidden]').value = el.dataset.value;
+        break;
+      }
+      case 'buyOpen': vd.buying = id; vd.moving = null; render(); break;
+      case 'buyCancel': vd.buying = null; render(); break;
+      case 'buySave': {
+        const box = el.closest('.fb');
+        const sub = box.querySelector('[name=fb_sub]').value.trim(), paid = box.querySelector('[name=fb_paid]').value, payment = box.querySelector('[name=fb_pay]').value;
+        if (!sub) { toast('Выберите абонемент', true); break; }
+        if (toNum(paid) == null) { toast('Укажите, сколько оплатил(а) на месте (если ничего — 0)', true); break; }
+        run(el, () => api('followUp', { id, action: 'bought', subscription: sub, paid, payment }), (d) => { toast(d.toast); vd.buying = null; render(); });
+        break;
+      }
+      case 'taskDone': run(el, () => api('taskDone', { id, done: el.dataset.done === '1' }), (d) => { toast(d.toast); render(); }); break;
+      case 'editTask': { const t = S.tasks.find((x) => x.id === id); if (t) go('taskForm', { edit: t }); break; }
+      case 'delTask': {
+        if (!(await confirmBox('Удалить задачу?'))) break;
+        run(el, () => api('deleteTask', { id }), (d) => { toast(d.toast); render(); });
+        break;
+      }
       case 'editTrial': { const t = findTrial(id); if (t) go('trialForm', { edit: t }); break; }
       case 'editCash': { const m = S.cash.moves.find((x) => x.id === id); if (m) go('cashForm', { edit: m }); break; }
       case 'del': {
@@ -901,7 +1099,7 @@
         break;
       }
       case 'fu': run(el, () => api('followUp', { id, action: el.dataset.do }), (d) => { toast(d.toast); vd.moving = null; render(); }); break;
-      case 'moveOpen': vd.moving = id; render(); break;
+      case 'moveOpen': vd.moving = id; vd.buying = null; render(); break;
       case 'moveCancel': vd.moving = null; render(); break;
       case 'moveSave': {
         const box = el.closest('.card');
@@ -936,7 +1134,7 @@
       case 'startShift': run(btn, () => api('startShift', { start: v.start, plannedEnd: v.plannedEnd }), toHome); break;
       case 'editShiftTime': run(btn, () => api('editShiftTime', { start: v.start, plannedEnd: v.plannedEnd }), toHome); break;
       case 'saveTrial': {
-        const payload = { teacher: v.teacher, came: v.came, bought: v.bought, comment: v.comment, nonBuyers: collectNB() };
+        const payload = { teacher: v.teacher, came: v.came, bought: v.bought, comment: v.comment, buyers: collectBuyers(), nonBuyers: collectNB() };
         if (vd.edit) payload.id = vd.edit.id;
         run(btn, () => api('saveTrial', payload), (d) => { toast(d.toast); go('trials'); });
         break;
@@ -945,6 +1143,14 @@
         const payload = { amount: v.amount, category: v.category, comment: v.comment, type: vd.edit ? (vd.edit.type === 'Расход' ? 'out' : 'in') : vd.type };
         if (vd.edit) payload.id = vd.edit.id;
         run(btn, () => api('saveCash', payload), (d) => { toast(d.toast); go('cash'); });
+        break;
+      }
+      case 'history': run(btn, () => api('history', { month: v.hMonth, who: v.hWho || 'all' }), (d) => { vd = { history: d.history, month: v.hMonth, who: v.hWho || 'all' }; render(); }); break;
+      case 'hours': run(btn, () => api('hours', { month: v.hrMonth, point: v.hrPoint || 'all' }), (d) => { vd = { hours: d.hours, month: v.hrMonth, point: v.hrPoint || 'all' }; render(); }); break;
+      case 'saveTask': {
+        const payload = { title: v.title, description: v.description, assignee: v.assignee, dueDate: v.dueDate, dueTime: v.dueTime };
+        if (vd.edit) payload.id = vd.edit.id;
+        run(btn, () => api('saveTask', payload), (d) => { toast(d.toast); go('tasks'); });
         break;
       }
       case 'bookIn': run(btn, () => api('addBooks', { mode: 'in', book: v.book, qty: v.qty, comment: v.comment }), (d) => { toast(d.toast); go('books'); }); break;
@@ -981,6 +1187,10 @@
       const prev = S.point;
       S.point = t.value;
       run(null, () => api('init'), () => render()).then(() => { if (S && S.point !== t.value) { S.point = prev; render(); } });
+    } else if (/^(by_sub_\d+|fb_sub)$/.test(t.name)) {
+      const s = S.subs.find((x) => x.name === t.value);
+      const amt = $app.querySelector(`[name="${t.name.replace('sub', 'paid')}"]`);
+      if (s && s.price != null && amt && (!amt.value || amt.dataset.auto === '1')) { amt.value = s.price; amt.dataset.auto = '1'; }
     } else if (t.dataset.remind !== undefined) {
       const box = t.closest('.nb').querySelector('.remind');
       box.hidden = !t.checked;
@@ -993,13 +1203,19 @@
     const f = t.closest('.field');
     if (f) f.classList.remove('err');
     if (t.name === 'came' || t.name === 'bought') refreshNB();
+    if (/^(by_paid_\d+|fb_paid)$/.test(t.name)) t.dataset.auto = '0';
     if (t.name === 'cashActual') updateDiff();
     if (t.dataset.taken !== undefined) updateBooksLeft();
     if (t.id === 'scriptSearch') { vd.q = t.value; vd.open = null; renderScripts(); }
   });
 
   setInterval(() => {
-    if (view !== 'home' || !S || !S.shift.open || S.shift.stale) return;
+    if (!S) return;
+    const hl = $app.querySelector('[data-hours]');
+    if (hl) hl.textContent = hoursText();
+    const ht = $app.querySelector('[data-h-today]'), hm = $app.querySelector('[data-h-month]');
+    if (ht && hm) { const L = liveHours(); ht.textContent = fmtH(L.today); hm.textContent = fmtH(L.month); }
+    if (view !== 'home' || !S.shift.open || S.shift.stale) return;
     const el = $app.querySelector('[data-tick]');
     if (el) el.textContent = dur(Math.max(0, Math.round((Date.now() - S.shift.startTs) / 60000))) + (S.points.length > 1 ? '' : ' · ' + S.point);
   }, 30000);
