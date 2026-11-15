@@ -116,6 +116,7 @@
   .seg.nbnext button { text-align: left; padding: 8px 12px; }
   .failbox { border: 1.5px solid var(--danger); }
   .failbox .sub { margin: 4px 0 10px; }
+  .sub-kv { color: var(--hint); font-size: 14px; padding-left: 14px; }
   .chip.due { background: rgba(229, 57, 53, .14); color: var(--danger); }
 
   .entry .top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
@@ -400,7 +401,7 @@
     if (!data.ok) throw new Error(data.error || 'Неизвестная ошибка');
     return data;
   }
-  const READS = { init: true, day: true, summary: true, history: true, hours: true };
+  const READS = { init: true, day: true, summary: true, history: true, hours: true, dds: true };
   async function api(action, payload) {
     const data = await request(action, payload);
     // пока что-то сохраняется, свежие данные придут с ответом на сохранение
@@ -516,11 +517,11 @@
   const VIEWS = {
     home: vHome, start: vStart, shiftTime: vShiftTime, cabinet: vCabinet, trials: vTrials, trialForm: vTrialForm,
     followups: vFollowups, lost: vLost, history: vHistory, hours: vHours, tasks: vTasks, taskForm: vTaskForm, cash: vCash, cashForm: vCashForm, books: vBooks, bookIn: vBookIn, bookSet: vBookSet,
-    scripts: vScripts, close: vClose, done: vDone, day: vDay, summary: vSummary,
+    scripts: vScripts, close: vClose, done: vDone, day: vDay, summary: vSummary, dds: vDds,
   };
   const PARENT = { cashForm: 'cash', bookIn: 'books', bookSet: 'books', trialForm: 'trials', taskForm: 'tasks' };
   const FRESH = { close: true, followups: true, lost: true, cash: true, trials: true, cabinet: true, tasks: true };
-  const MANAGER_ONLY = { day: true, summary: true, bookSet: true, hours: true };
+  const MANAGER_ONLY = { day: true, summary: true, bookSet: true, hours: true, dds: true };
 
   function go(v, data) {
     if (MANAGER_ONLY[v] && !S.user.isManager) v = 'home';
@@ -533,6 +534,7 @@
     const month = S.today.slice(0, 7);
     if (v === 'history') { run(null, () => api('history', { month, who: 'all' }), (d) => go('history', { history: d.history, month, who: d.history.who })); return; }
     if (v === 'hours') { run(null, () => api('hours', { month, point: 'all' }), (d) => go('hours', { hours: d.hours, month, point: 'all' })); return; }
+    if (v === 'summary') { run(null, () => api('summary', { month, point: 'all' }), (d) => go('summary', { summary: d.summary, month, point: 'all' })); return; }
     go(v, data);
     if (FRESH[v]) refreshInBackground(v);
   }
@@ -729,7 +731,14 @@
         ${!u.isManager || L0.month ? `<div class="hint" data-hours>${esc(hoursText())}</div>` : ''}
         <button class="btn mt" data-go="start" type="button">▶️ Начать смену</button></div>`;
     }
-    if (!u.isManager || c.month.came) {
+    if (u.isManager && S.school) {
+      // управляющий и директор: конверсия всей школы, Барабашка — по ней
+      const sc = S.school;
+      h += `<button class="cab-mini" data-go="summary" type="button">${mascot(mood(sc.conv), 64)}<div class="info">
+        <div class="sub">Конверсия школы за ${esc(c.monthLabel)}</div><div class="conv">${pct(sc.conv)}</div>
+        <div class="sub">${sc.came ? `пришли ${sc.came} · купили ${sc.bought}` : 'пробных в этом месяце ещё нет'}${sc.plan ? ' · план ' + sc.plan + '%' : ''}</div></div><span class="chev" style="color:var(--hint);font-size:20px">›</span></button>`;
+      if (c.month.came) h += `<button class="link" data-go="cabinet" type="button" style="margin:-4px 0 12px 4px">Мои пробные: ${c.month.came} → ${c.month.bought} (${pct(c.month.conv)}) ›</button>`;
+    } else if (!u.isManager || c.month.came) {
       h += `<button class="cab-mini" data-go="cabinet" type="button">${mascot(mood(c.month.conv), 64)}<div class="info">
         <div class="sub">Моя конверсия за ${esc(c.monthLabel)}</div><div class="conv">${pct(c.month.conv)}</div>
         <div class="sub">${esc(miniBonus())}</div></div><span class="chev" style="color:var(--hint);font-size:20px">›</span></button>`;
@@ -751,7 +760,8 @@
     if (u.isManager) {
       h += '<div class="grid mgr" style="margin-top:12px">' + tile('day', '📅', 'Отчёты по дням', 'все за выбранный день') +
         tile('history', '🗂', 'История отчётов', 'каждого сотрудника') + tile('hours', '⏱', 'Часы работы', 'по дням и неделям') +
-        tile('summary', '📊', 'Итоги месяца', 'продажи и бонусы') + '</div>';
+        tile('summary', '📊', 'Итоги месяца', 'продажи и бонусы') + '</div>' +
+        `<button class="wide" data-go="dds" type="button"><span class="ic">💸</span><span><span class="t">ДДС — движение денег</span><br><span class="sub">выгрузка за месяц: файл в Telegram</span></span><span class="chev">›</span></button>`;
     }
     return h;
   }
@@ -1329,13 +1339,30 @@
     h += '<button class="btn" type="submit">Показать</button></form>';
     return h + (vd.summary ? renderSummary(vd.summary) : '');
   }
+  function vDds() {
+    const month = vd.month || S.today.slice(0, 7);
+    let h = head('ДДС', 'Движение денег за месяц') + '<form class="card" data-submit="dds" novalidate>';
+    h += S.points.length > 1
+      ? '<div class="two">' + select('month', 'Месяц', monthOptions(), { req: true, value: month, raw: true }) + pointSelect('ddsPoint', vd.point) + '</div>'
+      : select('month', 'Месяц', monthOptions(), { req: true, value: month, raw: true });
+    h += '<div class="note">Файл придёт вам в чат с ботом и откроется в Excel, Numbers или Google Таблицах. В нём приходы и расходы кассы и оплаты абонементов картой и переводом, с итогами по статьям.</div>' +
+      '<button class="btn" type="submit">📤 Выгрузить в Telegram</button></form>';
+    const d = vd.dds;
+    if (!d) return h;
+    const t = d.totals;
+    h += `<div class="card"><h2>${esc(d.label)}</h2>` + kv('Приход', money(t.income)) +
+      t.byMethod.map((m) => `<div class="kv sub-kv"><span>${esc(m.method)}</span><span>${money(m.sum)}</span></div>`).join('') +
+      kv('Расход', money(t.expense)) + kv('Итого', money(t.net)) + kv('Строк в файле', d.count) + '</div>';
+    if (t.byCategory.length) h += '<div class="card"><h2>По статьям</h2>' + t.byCategory.map((c) => kv((c.kind === 'Расход' ? '− ' : '+ ') + c.category, money(c.sum))).join('') + '</div>';
+    return h;
+  }
   function renderSummary(s) {
     const gc = s.growth > 0 ? 'pos' : s.growth < 0 ? 'neg' : '';
     let h = `<div class="kpis"><div class="kpi"><b>${s.total}</b><span>купили</span></div><div class="kpi"><b>${s.cancels}</b><span>отменили</span></div>` +
       `<div class="kpi"><b class="${gc}">${s.growth > 0 ? '+' : ''}${s.growth}</b><span>прирост</span></div></div>`;
     h += '<div class="card"><h2>Пробные и продажи</h2>' + kv('Регистраций на пробное', s.registrations) + kv('Пришли на пробное', s.came) +
       kv('Купили сразу', s.boughtNow) + kv('Купили после звонка', s.late) + kv('Купили без пробного', s.noTrial) + kv('Оплачено на месте', money(s.paid)) +
-      kv('Конверсия пробных', pct(s.conv) + (s.plan != null ? ' (план ' + s.plan + '%)' : '')) + kv('Ждут звонка', s.waiting) + '</div>';
+      kv('Конверсия пробных', pct(s.conv) + (s.plan != null ? ' (план ' + s.plan + '%)' : '')) + kv('В «Добить»', s.waiting) + '</div>';
     h += '<div class="card"><h2>Админы и бонусы</h2>' + (s.admins.length
       ? table(['Админ', 'Конв.', 'Бонус', 'Пришли', 'Купили', 'Оплачено', 'Регистр.', 'Смен', 'Часы'],
         s.admins.map((a) => [a.name, pct(a.conv), a.bonus ? money(a.bonus) : '—', a.came, a.bought, money(a.paid), a.registrations, a.shifts, fmtNum(a.hours)])) +
@@ -1636,6 +1663,11 @@
         break;
       }
       case 'day': run(btn, () => api('day', { date: v.date, point: v.dayPoint || 'all' }), (d) => { vd = { date: v.date, point: v.dayPoint || 'all', day: d.day }; render(); }); break;
+      case 'dds': run(btn, () => api('dds', { month: v.month, point: v.ddsPoint || 'all', send: true }), (d) => {
+        if (d.toast) toast(d.toast);
+        vd = { month: v.month, point: v.ddsPoint || 'all', dds: d.dds };
+        render();
+      }); break;
       case 'summary': run(btn, () => api('summary', { month: v.month, point: v.sumPoint || 'all' }), (d) => { vd = { month: v.month, point: v.sumPoint || 'all', summary: d.summary }; render(); }); break;
       case 'closeShift': {
         const taken = {};
