@@ -117,6 +117,9 @@
   .failbox { border: 1.5px solid var(--danger); }
   .failbox .sub { margin: 4px 0 10px; }
   .sub-kv { color: var(--hint); font-size: 14px; padding-left: 14px; }
+  .ddsch button { font-size: 14px; }
+  .dds-day { display: flex; justify-content: space-between; margin: 14px 0 2px; font-size: 13px; font-weight: 600; color: var(--hint); text-transform: uppercase; letter-spacing: .03em; }
+  .dds-day:first-of-type { margin-top: 4px; }
   .chip.due { background: rgba(229, 57, 53, .14); color: var(--danger); }
 
   .entry .top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
@@ -534,6 +537,7 @@
     const month = S.today.slice(0, 7);
     if (v === 'history') { run(null, () => api('history', { month, who: 'all' }), (d) => go('history', { history: d.history, month, who: d.history.who })); return; }
     if (v === 'hours') { run(null, () => api('hours', { month, point: 'all' }), (d) => go('hours', { hours: d.hours, month, point: 'all' })); return; }
+    if (v === 'dds') { run(null, () => api('dds', { month, point: 'all' }), (d) => go('dds', { dds: d.dds, month, point: 'all', ch: 'all' })); return; }
     if (v === 'summary') { run(null, () => api('summary', { month, point: 'all' }), (d) => go('summary', { summary: d.summary, month, point: 'all' })); return; }
     go(v, data);
     if (FRESH[v]) refreshInBackground(v);
@@ -1345,15 +1349,43 @@
     h += S.points.length > 1
       ? '<div class="two">' + select('month', 'Месяц', monthOptions(), { req: true, value: month, raw: true }) + pointSelect('ddsPoint', vd.point) + '</div>'
       : select('month', 'Месяц', monthOptions(), { req: true, value: month, raw: true });
-    h += '<div class="note">Файл придёт вам в чат с ботом и откроется в Excel, Numbers или Google Таблицах. В нём приходы и расходы кассы и оплаты абонементов картой и переводом, с итогами по статьям.</div>' +
-      '<button class="btn" type="submit">📤 Выгрузить в Telegram</button></form>';
+    h += '<div class="two"><button class="btn" type="submit">Показать</button><button class="btn ghost" type="button" data-act="ddsSend">📤 Файл в Telegram</button></div></form>';
     const d = vd.dds;
     if (!d) return h;
-    const t = d.totals;
-    h += `<div class="card"><h2>${esc(d.label)}</h2>` + kv('Приход', money(t.income)) +
-      t.byMethod.map((m) => `<div class="kv sub-kv"><span>${esc(m.method)}</span><span>${money(m.sum)}</span></div>`).join('') +
-      kv('Расход', money(t.expense)) + kv('Итого', money(t.net)) + kv('Строк в файле', d.count) + '</div>';
-    if (t.byCategory.length) h += '<div class="card"><h2>По статьям</h2>' + t.byCategory.map((c) => kv((c.kind === 'Расход' ? '− ' : '+ ') + c.category, money(c.sum))).join('') + '</div>';
+    const ch = vd.ch || 'all';
+    const CH = d.channels;
+    const rows = d.rows.filter((r) => ch === 'all' || r.ch === ch);
+    const sum = (f) => Math.round(rows.filter(f).reduce((s, r) => s + r.amount, 0) * 100) / 100;
+    const inc = sum((r) => !r.out), out = sum((r) => r.out);
+    h += `<div class="seg wrap ddsch">${[['all', 'Все']].concat(Object.keys(CH).map((k) => [k, CH[k]])).map(([k, l]) =>
+      `<button type="button" data-act="ddsCh" data-value="${k}" class="${ch === k ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>`;
+    h += `<div class="card"><h2>${esc(d.label)}${ch === 'all' ? '' : ' · ' + esc(CH[ch])}</h2>` + kv('Приход', money(inc)) + (out || ch === 'all' || ch === 'cash' ? kv('Расход', money(out)) : '') +
+      `<div class="kv"><span>Итого</span><b class="${inc - out < 0 ? 'neg' : 'pos'}">${money(inc - out)}</b></div>`;
+    if (ch === 'all') {
+      h += d.totals.byChannel.filter((c) => c.income || c.expense).map((c) => `<div class="kv sub-kv"><span>${esc(c.name)}</span><span>+${money(c.income)}${c.expense ? ' · −' + money(c.expense) : ''}</span></div>`).join('');
+    } else {
+      const bm = {};
+      rows.filter((r) => !r.out).forEach((r) => { bm[r.method] = (bm[r.method] || 0) + r.amount; });
+      const ms = Object.keys(bm);
+      if (ms.length > 1 || (ms.length === 1 && ms[0] !== CH[ch])) h += ms.map((m) => `<div class="kv sub-kv"><span>${esc(m)}</span><span>${money(bm[m])}</span></div>`).join('');
+    }
+    h += '</div>';
+    if (!rows.length) return h + '<div class="card empty">Движений нет<div class="hint">Выберите другой месяц, точку или вкладку.</div></div>';
+    const cats = {};
+    rows.forEach((r) => { const k = (r.out ? '− ' : '+ ') + r.category; cats[k] = (cats[k] || 0) + r.amount; });
+    h += '<div class="card"><h2>По статьям</h2>' + Object.keys(cats).sort((a, b) => (a[0] === b[0] ? cats[b] - cats[a] : a[0] === '+' ? -1 : 1))
+      .map((k) => kv(k, money(cats[k]))).join('') + '</div>';
+    const WD = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+    const days = [];
+    rows.slice().reverse().forEach((r) => { const last = days[days.length - 1]; if (last && last.dk === r.dk) last.rows.push(r); else days.push({ dk: r.dk, date: r.date, rows: [r] }); });
+    h += '<div class="card"><h2>Все операции · ' + rows.length + '</h2>' + days.map((g) => {
+      const [y, m, dd] = g.dk.split('-').map(Number);
+      const net = Math.round(g.rows.reduce((s, r) => s + (r.out ? -r.amount : r.amount), 0) * 100) / 100;
+      return `<div class="dds-day"><span>${esc(g.date)} · ${WD[new Date(y, m - 1, dd).getDay()]}</span><span class="${net < 0 ? 'neg' : 'pos'}">${net < 0 ? '−' : '+'}${money(Math.abs(net))}</span></div>` +
+        g.rows.map((r) => `<div class="item"><div style="min-width:0"><div><b>${esc(r.category)}</b>${ch === 'all' ? ` <span class="chip">${esc(r.ch === 'cash' ? 'нал' : r.ch === 'opus' ? 'Opus' : 'счёт')}</span>` : ''}</div>
+          <div class="hint" style="margin-top:2px">${esc(r.time)}${r.comment ? ' · ' + esc(r.comment) : ''}${r.method !== CH[r.ch] && ch !== 'cash' ? ' · ' + esc(r.method) : ''} · ${esc(r.who)}${d.multi ? ' · ' + esc(r.point) : ''}</div></div>
+          <b class="${r.out ? 'neg' : 'pos'}" style="white-space:nowrap">${r.out ? '−' : '+'}${money(r.amount)}</b></div>`).join('');
+    }).join('') + '</div>';
     return h;
   }
   function renderSummary(s) {
@@ -1503,6 +1535,13 @@
       }
       case 'failOpen': { const r = failed && failed.op.retry; failed = null; if (r) go(r.view, r.data); else render(); break; }
       case 'failClose': failed = null; render(); break;
+      case 'ddsCh': vd.ch = el.dataset.value; render(); break;
+      case 'ddsSend': {
+        const f = el.closest('form');
+        const month = f.elements.month.value, point = f.elements.ddsPoint ? f.elements.ddsPoint.value : 'all';
+        run(el, () => api('dds', { month, point, send: true }), (d) => toast(d.toast));
+        break;
+      }
       case 'moveOpen': vd.moving = id; vd.buying = null; render(); break;
       case 'moveCancel': vd.moving = null; render(); break;
       case 'moveSave': {
@@ -1663,9 +1702,8 @@
         break;
       }
       case 'day': run(btn, () => api('day', { date: v.date, point: v.dayPoint || 'all' }), (d) => { vd = { date: v.date, point: v.dayPoint || 'all', day: d.day }; render(); }); break;
-      case 'dds': run(btn, () => api('dds', { month: v.month, point: v.ddsPoint || 'all', send: true }), (d) => {
-        if (d.toast) toast(d.toast);
-        vd = { month: v.month, point: v.ddsPoint || 'all', dds: d.dds };
+      case 'dds': run(btn, () => api('dds', { month: v.month, point: v.ddsPoint || 'all' }), (d) => {
+        vd = { month: v.month, point: v.ddsPoint || 'all', dds: d.dds, ch: vd.ch || 'all' };
         render();
       }); break;
       case 'summary': run(btn, () => api('summary', { month: v.month, point: v.sumPoint || 'all' }), (d) => { vd = { month: v.month, point: v.sumPoint || 'all', summary: d.summary }; render(); }); break;
