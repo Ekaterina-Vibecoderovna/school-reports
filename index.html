@@ -756,7 +756,7 @@
       tile('lost', '❌', 'Не купили', 'вся школа, с причинами') +
       tile('tasks', '📌', 'Задачи', tasksHint(), urgent) +
       tile('cash', '💵', 'Касса', S.cash.expected != null ? money(S.cash.expected) : 'приход и расход') +
-      tile('books', '📚', 'Книги', booksHint()) +
+      tile('books', '📚', 'Учебники', booksHint()) +
       '</div>';
     h += `<button class="wide" data-go="scripts" type="button"><span class="ic">💬</span><span><span class="t">Скрипты продаж</span><br><span class="sub">быстрый поиск: ${S.scripts.length}</span></span><span class="chev">›</span></button>`;
     if (!u.isManager) h += `<button class="wide" data-go="history" type="button"><span class="ic">🗂</span><span><span class="t">Мои отчёты и часы</span><br><span class="sub">история всех смен</span></span><span class="chev">›</span></button>`;
@@ -1185,12 +1185,12 @@
   }
   function vBooks() {
     const b = S.books;
-    let h = head('Книги', esc(S.point));
+    let h = head('Учебники', esc(S.point));
     h += '<div class="card"><h2>Сейчас в наличии</h2>' + b.stock.map((x) => `<div class="kv"><span>${esc(x.name)}</span><span>${bookLeft(x.left)}</span></div>`).join('') +
       (b.stock.some((x) => x.left == null) ? '<div class="hint">Остаток «не задан» — управляющему нужно один раз сделать пересчёт.</div>' : '') + '</div>';
-    h += '<div class="row-btns" style="margin:0 0 12px"><button class="btn ok" data-go="bookIn" type="button">＋ Привезли книги</button>' +
+    h += '<div class="row-btns" style="margin:0 0 12px"><button class="btn ok" data-go="bookIn" type="button">＋ Привезли учебники</button>' +
       (S.user.isManager ? '<button class="btn ghost" data-go="bookSet" type="button">🔢 Пересчёт</button>' : '') + '</div>';
-    h += '<div class="note">Сколько книг забрали за день, указывается в отчёте при закрытии смены — остаток посчитается сам.</div>';
+    h += '<div class="note">Остаток каждого учебника админ указывает в отчёте при закрытии смены.</div>';
     if (b.moves.length) {
       h += '<div class="card"><h2>Сегодня</h2>' + b.moves.map((m) => `<div class="item"><div><div>${esc(m.type)} · ${esc(m.book)}: <b>${m.type === 'Выдано' ? '−' : m.type === 'Поступило' ? '+' : '='}${m.qty}</b></div>
         <div class="hint">${esc(m.time)} · ${esc(m.admin)}${m.comment ? ' · ' + esc(m.comment) : ''}</div></div>
@@ -1199,12 +1199,12 @@
     return h;
   }
   function vBookIn() {
-    return head('Привезли книги', esc(S.point)) + '<form class="card" data-submit="bookIn" novalidate>' +
-      select('book', 'Книга', S.lists.books, { req: true }) + numInput('qty', 'Сколько привезли', { req: true, int: true }) +
+    return head('Привезли учебники', esc(S.point)) + '<form class="card" data-submit="bookIn" novalidate>' +
+      select('book', 'Учебник', S.lists.books, { req: true }) + numInput('qty', 'Сколько привезли', { req: true, int: true }) +
       area('comment', 'Комментарий', { rows: 2 }) + '<button class="btn ok" type="submit">Записать поступление</button></form>';
   }
   function vBookSet() {
-    return head('Пересчёт книг', esc(S.point)) + '<form class="card" data-submit="bookSet" novalidate>' +
+    return head('Пересчёт учебников', esc(S.point)) + '<form class="card" data-submit="bookSet" novalidate>' +
       '<div class="note">Укажите, сколько книг реально лежит сейчас. Пустое поле — не менять.</div><div class="books">' +
       S.books.stock.map((x, i) => numInput('set_' + i, x.name, { int: true, raw: true, value: x.left == null ? '' : String(x.left) })).join('') +
       '</div>' + area('comment', 'Комментарий', { rows: 2 }) + '<button class="btn" type="submit">Сохранить остатки</button></form>';
@@ -1261,8 +1261,8 @@
       numInput('registrations', 'Записали на пробное', { req: true, int: true }) +
       numInput('noTrialSales', 'Купили без пробного', { int: true, value: '0' }) + '</div>';
     if (S.books.stock.length) {
-      h += '<h2>Книги — сколько забрали сегодня</h2><div class="books">' + S.books.stock.map((b, i) =>
-        `<div>${numInput('taken_' + i, b.name, { int: true, value: '0', data: `data-taken="${i}"` })}<div class="left" id="left_${i}"></div></div>`).join('') + '</div>';
+      h += '<h2>Учебники — сколько осталось</h2><div class="hint" style="margin:-4px 0 10px">Пересчитайте и поправьте, если не совпадает с учётом.</div><div class="books">' + S.books.stock.map((b, i) =>
+        `<div>${numInput('bleft_' + i, b.name, { int: true, req: true, value: b.left == null ? '' : String(Math.max(0, b.left)), data: `data-bleft="${i}"` })}<div class="left" id="left_${i}"></div></div>`).join('') + '</div>';
     }
     h += '<h2>Занятия и касса</h2>' +
       numInput('students', 'Сколько человек пришли на обычные занятия', { req: true, int: true }) +
@@ -1286,12 +1286,12 @@
   function updateBooksLeft() {
     S.books.stock.forEach((b, i) => {
       const el = document.getElementById('left_' + i);
-      const inp = $app.querySelector(`[name="taken_${i}"]`);
+      const inp = $app.querySelector(`[name="bleft_${i}"]`);
       if (!el || !inp) return;
-      const t = toNum(inp.value) || 0;
-      if (b.left == null) { el.textContent = 'остаток не задан'; return; }
-      const left = b.left - t;
-      el.innerHTML = 'останется: ' + bookLeft(left);
+      const v = toNum(inp.value);
+      if (b.left == null) { el.textContent = 'по учёту: не задано'; return; }
+      const d = v == null ? 0 : b.left - v;
+      el.textContent = 'по учёту ' + b.left + (v == null || d === 0 ? '' : d > 0 ? ' · ушло ' + d : ' · больше на ' + (-d));
     });
   }
 
@@ -1708,15 +1708,13 @@
       }); break;
       case 'summary': run(btn, () => api('summary', { month: v.month, point: v.sumPoint || 'all' }), (d) => { vd = { month: v.month, point: v.sumPoint || 'all', summary: d.summary }; render(); }); break;
       case 'closeShift': {
-        const taken = {};
-        S.books.stock.forEach((b, i) => { taken[b.name] = v['taken_' + i]; });
-        const payload = { start: v.start, end: v.end, registrations: v.registrations, noTrialSales: v.noTrialSales, taken,
+        const left = {};
+        S.books.stock.forEach((b, i) => { left[b.name] = v['bleft_' + i]; });
+        const payload = { start: v.start, end: v.end, registrations: v.registrations, noTrialSales: v.noTrialSales, left,
           students: v.students, cashActual: v.cashActual, problems: v.problems, comment: v.comment };
         const exp = S.cash.expected, a = toNum(v.cashActual);
         if (exp != null && a != null && Math.abs(a - exp) >= 0.005 &&
           !(await confirmBox('Касса не сходится: ' + (a > exp ? '+' : '−') + money(Math.abs(a - exp)) + '. Отправить отчёт с расхождением?'))) return;
-        const neg = S.books.stock.filter((b, i) => b.left != null && b.left - (toNum(v['taken_' + i]) || 0) < 0).map((b) => b.name);
-        if (neg.length && !(await confirmBox('Книг меньше нуля: ' + neg.join(', ') + '. Всё равно отправить?'))) return;
         run(btn, async () => {
           await drain();
           if (failed) throw new Error('Сначала разберитесь с тем, что не сохранилось (красная плашка сверху)');
@@ -1754,7 +1752,7 @@
     if (t.name === 'came' || t.name === 'bought') refreshNB();
     if (/^(by_paid_\d+|fb_paid)$/.test(t.name)) t.dataset.auto = '0';
     if (t.name === 'cashActual') updateDiff();
-    if (t.dataset.taken !== undefined) updateBooksLeft();
+    if (t.dataset.bleft !== undefined) updateBooksLeft();
     if (t.id === 'scriptSearch') { vd.q = t.value; vd.open = null; renderScripts(); }
     if (t.id === 'lostSearch') { vd.lq = t.value; vd.buying = vd.taking = null; const L = document.getElementById('lostList'); if (L) L.innerHTML = lostItems(); }
   });
