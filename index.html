@@ -426,7 +426,29 @@
     derive();
     store.set('point', base.point);
     if (!hasUnsaved()) saveState();
+    syncLive();
   }
+  /** Свежее число записей на пробное — на главной и в форме отчёта (если поле не правили руками). */
+  function syncLive() {
+    if (!S || !S.shift || !S.shift.open) return;
+    const n = $app.querySelector('[data-regs]');
+    if (n && n.textContent !== String(S.shift.regs || 0)) n.textContent = S.shift.regs || 0;
+    const f = $app.querySelector('form[data-submit=closeShift] [name=registrations]');
+    if (f && f.dataset.auto === '1') {
+      f.value = S.shift.regs ? String(S.shift.regs) : '';
+      const hint = f.closest('.field') && f.closest('.field').querySelector('.hint');
+      if (hint) hint.textContent = S.shift.regs ? 'со счётчика — проверьте' : '';
+    }
+  }
+  // Вернулись в Барабашку (с экрана телефона после виджета или из свёрнутого Telegram) — сразу подтягиваем свежие данные
+  let lastWake = 0;
+  function onWake() {
+    if (!S || busy || document.visibilityState === 'hidden' || Date.now() - lastWake < 5000) return;
+    lastWake = Date.now();
+    refreshInBackground(view);
+  }
+  document.addEventListener('visibilitychange', onWake);
+  window.addEventListener('focus', onWake);
   const hasUnsaved = () => !!sending || queue.length > 0;
   /** S = последнее с сервера + ещё не сохранённые изменения поверх. */
   function derive() {
@@ -750,7 +772,9 @@
       const L0 = liveHours();
       h += `<div class="card shift"><div class="t">Смена не начата</div><div class="sub">Нажмите, когда пришли на работу${where}</div>
         ${!u.isManager || L0.month ? `<div class="hint" data-hours>${esc(hoursText())}</div>` : ''}
-        <button class="btn mt" data-go="start" type="button">▶️ Начать смену</button></div>`;
+        <button class="btn mt" data-go="start" type="button">▶️ Начать смену</button>
+        <div class="hint" style="margin-top:10px">📝 После начала смены здесь появится счётчик «Записи на пробное».</div></div>
+        <button class="link center-link" style="margin:-4px auto 12px;padding-top:0" type="button" data-go="widget">📲 Кнопка «＋1» виджетом на экран iPhone ›</button>`;
     }
     if (u.isManager && S.school) {
       // управляющий и директор: конверсия всей школы, Барабашка — по ней
@@ -1276,7 +1300,7 @@
       '<div class="two">' + input('start', 'Начало', { type: 'time', req: true, value: sh.open ? sh.start : '' }) +
       input('end', 'Конец', { type: 'time', req: true, value: nowHM() }) + '</div>' +
       '<h2>Пробные и продажи</h2><div class="two">' +
-      numInput('registrations', 'Записали на пробное', { req: true, int: true, value: sh.open && sh.regs ? String(sh.regs) : '', hint: sh.open && sh.regs ? 'со счётчика — проверьте' : '' }) +
+      numInput('registrations', 'Записали на пробное', { req: true, int: true, value: sh.open && sh.regs ? String(sh.regs) : '', hint: sh.open && sh.regs ? 'со счётчика — проверьте' : '', data: sh.open ? 'data-auto="1"' : '' }) +
       numInput('noTrialSales', 'Купили без пробного', { int: true, value: '0' }) + '</div>';
     if (S.books.stock.length) {
       h += '<h2>Учебники — сколько осталось</h2><div class="hint" style="margin:-4px 0 10px">Пересчитайте и поправьте, если не совпадает с учётом.</div><div class="books">' + S.books.stock.map((b, i) =>
@@ -1825,6 +1849,7 @@
     if (t.name === 'came' || t.name === 'bought') refreshNB();
     if (/^(by_paid_\d+|fb_paid)$/.test(t.name)) t.dataset.auto = '0';
     if (t.name === 'cashActual') updateDiff();
+    if (t.name === 'registrations') t.dataset.auto = '0';
     if (t.dataset.bleft !== undefined) updateBooksLeft();
     if (t.id === 'scriptSearch') { vd.q = t.value; vd.open = null; renderScripts(); }
     if (t.id === 'lostSearch') { vd.lq = t.value; vd.buying = vd.taking = null; const L = document.getElementById('lostList'); if (L) L.innerHTML = lostItems(); }
@@ -1876,6 +1901,7 @@
       if (!e.silent) screen('😕', 'Не получилось загрузить', esc(e.message), true);
     }
   }
+  try { if (inTg && tg.isVersionAtLeast('8.0')) tg.onEvent('activated', onWake); } catch (e) { /* старый Telegram */ }
   // Иконка Барабашки на экране телефона (Telegram 8.0+)
   let homeIcon = '';
   try {
