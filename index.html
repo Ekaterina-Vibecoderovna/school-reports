@@ -125,6 +125,13 @@
   .reg-minus { width: 44px; height: 44px; border-radius: 12px; border: 0; background: var(--soft); color: var(--text); font: inherit; font-size: 24px; cursor: pointer; flex: none; }
   .reg-plus { width: auto; flex: none; padding: 0 18px; min-height: 56px; font-size: 17px; margin: 0; }
   .center-link { display: block; margin: 14px auto 0; }
+  .cx .seg { margin-bottom: 0; }
+  .cx-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-bottom: 1px solid rgba(127, 127, 127, .15); font-size: 15px; }
+  .cx-stat:last-of-type { border-bottom: 0; }
+  .cx-stat > span { color: var(--hint); }
+  .cx a { color: var(--link); }
+  .pay-pt + .pay-pt { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line, rgba(0,0,0,.08)); }
+  .pay-h { font-weight: 600; margin-bottom: 2px; }
   ol.steps { margin: 4px 0 0; padding-left: 20px; }
   ol.steps li { margin: 7px 0; line-height: 1.45; }
   .ddsch button { font-size: 14px; }
@@ -510,7 +517,7 @@
   /** Дождаться, пока всё сохранится (перед отчётом и сменой точки). */
   function drain() { return hasUnsaved() ? new Promise((r) => drainWaiters.push(r)) : Promise.resolve(); }
   // Экраны без полей ввода перерисовываем, когда пришёл ответ; формы не трогаем.
-  const SOFT = { home: true, trials: true, cash: true, books: true, tasks: true, followups: true, lost: true, cabinet: true };
+  const SOFT = { home: true, trials: true, cash: true, books: true, tasks: true, followups: true, lost: true, cabinet: true, cancels: true };
   function softRender() {
     if (!S || busy || !SOFT[view] || formFocused() || vd.buying || vd.moving || vd.taking) return;
     const y = window.scrollY;
@@ -552,10 +559,10 @@
   const VIEWS = {
     home: vHome, start: vStart, shiftTime: vShiftTime, cabinet: vCabinet, trials: vTrials, trialForm: vTrialForm,
     followups: vFollowups, lost: vLost, widget: vWidget, history: vHistory, hours: vHours, tasks: vTasks, taskForm: vTaskForm, cash: vCash, cashForm: vCashForm, books: vBooks, bookIn: vBookIn, bookSet: vBookSet,
-    scripts: vScripts, close: vClose, done: vDone, day: vDay, summary: vSummary, dds: vDds,
+    scripts: vScripts, close: vClose, done: vDone, day: vDay, summary: vSummary, dds: vDds, cancels: vCancels,
   };
   const PARENT = { cashForm: 'cash', bookIn: 'books', bookSet: 'books', trialForm: 'trials', taskForm: 'tasks' };
-  const FRESH = { close: true, followups: true, lost: true, cash: true, trials: true, cabinet: true, tasks: true };
+  const FRESH = { close: true, followups: true, lost: true, cash: true, trials: true, cabinet: true, tasks: true, cancels: true };
   const MANAGER_ONLY = { day: true, summary: true, bookSet: true, hours: true, dds: true };
 
   function go(v, data) {
@@ -742,7 +749,31 @@
     const el = H.openStartTs ? Math.min(16, Math.max(0, (Date.now() - H.openStartTs) / 36e5)) : 0;
     return { today: H.today + (H.openToday ? el : 0), month: H.month + el };
   }
-  const hoursText = () => { const L = liveHours(); return '⏱ Сегодня отработано: ' + fmtH(L.today) + ' · за ' + S.hours.monthLabel + ': ' + fmtH(L.month); };
+  const hoursText = () => { const L = liveHours(); const P = livePay(); return '⏱ Сегодня отработано: ' + fmtH(L.today) + ' · за ' + S.hours.monthLabel + ': ' + fmtH(L.month) + (P != null ? ' ≈ ' + money(P) : ''); };
+  // заработок админа за месяц сейчас: часы на точке × ставка точки (+ идущая смена)
+  function livePay() {
+    const P = S.hours && S.hours.pay;
+    if (!P || !P.points || !P.points.length) return null;
+    const el = S.hours.openStartTs ? Math.min(16, Math.max(0, (Date.now() - S.hours.openStartTs) / 36e5)) : 0;
+    return Math.round(P.points.reduce((s, p) => s + (p.hours + (p.point === P.openPoint ? el : 0)) * p.rate, 0));
+  }
+  const signed = (n) => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n);
+  function payCard(title, points, openPoint, live) {
+    if (!points || !points.length) return '';
+    const el = live && S.hours.openStartTs ? Math.min(16, Math.max(0, (Date.now() - S.hours.openStartTs) / 36e5)) : 0;
+    let total = 0;
+    const many = points.length > 1 || S.points.length > 1;
+    const lines = points.map((p) => {
+      const hrs = p.hours + (live && p.point === openPoint ? el : 0);
+      const earned = Math.round(hrs * p.rate);
+      total += earned;
+      return `<div class="pay-pt">${many ? `<div class="pay-h">${esc(p.point)}</div>` : ''}` +
+        kv(fmtH(hrs) + ' × ' + money(p.rate) + '/ч', money(earned)) +
+        `<div class="hint">Прирост точки: ${signed(p.growth)} (купили ${p.sold}, отменили ${p.cancels})${p.next ? ` · до ставки ${money(p.next.rate)}/ч ещё ${signed(p.next.need)}` : ' · это самая высокая ставка 🎉'}</div></div>`;
+    }).join('');
+    return `<div class="card"><h2>${esc(title)}</h2>${lines}${points.length > 1 ? kv('Итого', money(total)) : ''}` +
+      '<div class="hint">Ставка зависит от прироста точки за месяц: все продажи на точке минус подтверждённые отмены. Окончательно — по итогам месяца.</div></div>';
+  }
 
   // ───────── экраны ─────────
   function vHome() {
@@ -799,6 +830,9 @@
       tile('cash', '💵', 'Касса', S.cash.expected != null ? money(S.cash.expected) : 'приход и расход') +
       tile('books', '📚', 'Учебники', booksHint()) +
       '</div>';
+    const cx = S.cancels && S.cancels.list ? S.cancels.list.filter((x) => x.status === 'Новая' || x.status === 'Дубль?').length : 0;
+    const cxWork = S.cancels && S.cancels.list ? S.cancels.list.filter((x) => x.status === 'В работе').length : 0;
+    h += `<button class="wide" data-go="cancels" type="button"><span class="ic">🚪</span><span><span class="t">Заявки на отмену</span><br><span class="sub">${cx ? 'новых: ' + cx : 'новых нет'}${cxWork ? ' · в работе: ' + cxWork : ''}</span></span>${cx ? `<span class="badge" style="position:static;margin-left:auto">${cx}</span>` : '<span class="chev">›</span>'}</button>`;
     h += `<button class="wide" data-go="scripts" type="button"><span class="ic">💬</span><span><span class="t">Скрипты продаж</span><br><span class="sub">быстрый поиск: ${S.scripts.length}</span></span><span class="chev">›</span></button>`;
     if (!u.isManager) h += `<button class="wide" data-go="history" type="button"><span class="ic">🗂</span><span><span class="t">Мои отчёты и часы</span><br><span class="sub">история всех смен</span></span><span class="chev">›</span></button>`;
     h += `<button class="btn${sh.open ? '' : ' ghost'}" data-go="close" type="button">🏁 ${sh.open ? 'Закрыть смену и отправить отчёт' : 'Заполнить отчёт за день'}</button>`;
@@ -1105,6 +1139,7 @@
       h += `<div class="kpis two-k"><div class="kpi"><b data-h-today>${fmtH(L.today)}</b><span>отработано сегодня</span></div>` +
         `<div class="kpi"><b data-h-month>${fmtH(L.month)}</b><span>за ${esc(S.hours.monthLabel)} к сегодня</span></div></div>` +
         '<div class="hint center-text" style="margin:-4px 0 12px">Счётчик месяца обнуляется 1-го числа. История за все месяцы сохраняется.</div>';
+      if (S.hours.pay) h += payCard('💰 Заработок за ' + S.hours.monthLabel + ' сейчас', S.hours.pay.points, S.hours.pay.openPoint, true);
     }
     h += '<form class="card" data-submit="history" novalidate>' + (isM ? '<div class="two">' : '') +
       select('hMonth', 'Месяц', monthOptions(), { req: true, raw: true, value: vd.month || S.today.slice(0, 7) }) +
@@ -1113,6 +1148,7 @@
     if (!r) return h;
     h += '<div class="card">' + kv((isM ? r.whoName + ' · ' : '') + 'отработано за ' + r.label + (r.isCurrent ? ' (к сегодня)' : ''), fmtH(r.total)) +
       kv('Смен', r.count) + kv('Рабочих дней', r.days) + '</div>';
+    if (r.pay && r.pay.points.length && (isM || !r.isCurrent)) h += payCard('💰 Заработок за ' + r.label + (r.isCurrent ? ' (к сегодня)' : ''), r.pay.points, '', false);
     if (r.weeks.length) h += '<div class="card"><h2>По неделям (пн–вс)</h2>' + r.weeks.map((w) => kv(w.label, fmtH(w.hours))).join('') + '</div>';
     if (!r.shifts.length) return h + '<div class="card empty">В этом месяце смен нет</div>';
     return h + r.shifts.map((s, i) => `<div class="card entry"><div class="top"><div class="name">${esc(s.date)}</div>${s.closed ? `<b>${fmtH(s.hours)}</b>` : '<span class="chip wait">смена идёт</span>'}</div>
@@ -1131,6 +1167,18 @@
     if (!r.admins.length) return h + '<div class="card empty">В этом месяце смен нет</div>';
     const fh = (x) => (x ? fmtNum(x) : '—');
     const short = (a) => a.name.split(' ')[0];
+    if (r.rates && r.rates.length) {
+      h += '<div class="card"><h2>Ставка админов за ' + esc(r.label) + '</h2>' + r.rates.map((x) =>
+        kv(x.point + ': прирост ' + signed(x.growth), money(x.rate) + '/ч') +
+        `<div class="hint" style="margin:-4px 0 6px">купили ${x.sold}, отменили ${x.cancels}${x.next ? ` · до ${money(x.next.rate)}/ч ещё ${signed(x.next.need)}` : ' · самая высокая ставка'}</div>`).join('') + '</div>';
+    }
+    const paid = r.admins.filter((a) => a.admin && a.pay && a.pay.length);
+    if (paid.length) {
+      h += `<div class="card"><h2>Заработок админов ${r.isCurrent ? '(к сегодня)' : 'за ' + esc(r.label)}</h2>` + paid.map((a) =>
+        kv(a.name + (a.open ? ' ⏳' : ''), money(a.earned)) +
+        `<div class="hint" style="margin:-4px 0 6px">${a.pay.map((x) => (S.points.length > 1 ? esc(x.point) + ': ' : '') + fmtNum(x.hours) + ' ч × ' + money(x.rate)).join(' · ')}</div>`).join('') +
+        `${kv('Всего', money(paid.reduce((s, a) => s + a.earned, 0)))}</div>`;
+    }
     const tot = (key, field) => r.admins.reduce((s, a) => s + (a[field][key] || 0), 0);
     h += `<div class="card"><h2>${r.isCurrent ? 'К сегодняшнему дню' : 'За ' + esc(r.label)}</h2>` +
       table(r.isCurrent ? ['Сотрудник', 'Сегодня', 'Неделя', 'Месяц'] : ['Сотрудник', 'Месяц'],
@@ -1411,6 +1459,59 @@
     h += '<button class="link center-link" type="button" data-act="widgetReset">🔄 Сменить ключ (если ссылка попала к кому-то ещё)</button>';
     return h;
   }
+  // ── заявки на отмену
+  function cxCard(x) {
+    const st = x.status;
+    const chipCls = st === 'Новая' ? 'due' : st === 'В работе' || st === 'Дубль?' ? 'wait' : st === 'Удержали' ? 'won' : '';
+    const multi = S.points.length > 1;
+    let h = `<div class="card entry cx"><div class="top"><div class="name">${esc(x.student)}</div><span class="chip ${chipCls}">${esc(st === 'Удержали' ? 'остался' : st.toLowerCase())}</span></div>
+      <div class="kind">${x.pause ? '⏸ Пауза' : '🚪 Отмена'}${x.instrument ? ' · ' + esc(x.instrument) : ''}${multi ? ' · ' + esc(x.point) : ''}${x.end ? ' · с ' + esc(x.end) : ''}</div>
+      ${x.reason ? `<div class="sub">${esc(x.reason)}</div>` : ''}
+      <div class="hint">${[x.contact, x.email].filter(Boolean).map(esc).join(' · ')}${x.phone ? ` · <a href="tel:${esc(x.phone.replace(/[^+\d]/g, ''))}">${esc(x.phone)}</a>` : ''}</div>
+      <div class="hint">Заявка ${esc(x.created)}${x.rating ? ' · оценка лекторов: ' + esc(x.rating) : ''}${x.discuss ? ' · 💬 хочет обсудить с командой' : ''}${x.worker ? ' · ' + (st === 'В работе' ? 'взял(а)' : 'обработал(а)') + ': ' + esc(x.worker) : ''}</div>
+      ${x.comment ? `<div class="sub" style="margin-top:6px">💬 ${esc(x.comment)}${x.doneAt ? ' <span class="hint">(' + esc(x.doneAt) + ')</span>' : ''}</div>` : ''}`;
+    if (st === 'Новая') h += `<div class="row-btns"><button class="btn small" type="button" data-act="cx" data-do="take" data-id="${esc(x.id)}">📞 Беру — свяжусь</button></div>`;
+    else if (st === 'В работе') {
+      h += `<div class="mt">${area('cxc_' + x.id, 'Что предложили и чем закончилось', { req: true, rows: 2, raw: true, value: x.comment, placeholder: 'Например: предложили другое время / скидку на месяц' })}
+        <div class="seg wrap cx-out"><button type="button" data-act="cx" data-do="stay" data-id="${esc(x.id)}">✅ Остался</button><button type="button" data-act="cx" data-do="pause" data-id="${esc(x.id)}">⏸ Пауза</button><button type="button" data-act="cx" data-do="gone" data-id="${esc(x.id)}">❌ Ушёл</button></div></div>`;
+    } else if (st === 'Дубль?') {
+      h += `<div class="note" style="margin-top:8px">🔁 Похоже на повтор: ${esc(x.dupInfo || 'уже есть заявка этого ученика на этот инструмент')}. Это тот же запрос или новый?</div>
+        <div class="row-btns"><button class="btn small ghost" type="button" data-act="cx" data-do="dup" data-id="${esc(x.id)}">🔁 Да, дубль</button><button class="btn small" type="button" data-act="cx" data-do="notdup" data-id="${esc(x.id)}">🆕 Нет, новая заявка</button></div>`;
+    } else if (st === 'Дубль') h += `<div class="hint">Отмечено как дубль${x.dupInfo ? ': ' + esc(x.dupInfo) : ''} — второй раз не считается.</div><button class="link" type="button" data-act="cx" data-do="notdup" data-id="${esc(x.id)}">Это не дубль ›</button>`;
+    else h += '<button class="link" type="button" data-act="cx" data-do="reopen" data-id="' + esc(x.id) + '">Изменить итог ›</button>';
+    return h + '</div>';
+  }
+  function vCancels() {
+    const C = S.cancels || { list: [], stats: [] };
+    let h = head('Заявки на отмену', 'Свяжитесь и постарайтесь удержать');
+    if (C.stats.length) {
+      h += `<div class="card"><h2>За ${esc(C.monthLabel || '')}</h2>` + C.stats.map((s) =>
+        `<div class="cx-stat">${S.points.length > 1 ? `<b>${esc(s.point)}</b>` : ''}<span>заявок ${s.requests}${s.open ? ' · ждут ответа ' + s.open : ''}</span>` +
+        `<span><span class="pos">удержали ${s.stayed}</span> · пауза ${s.paused} · <span class="neg">ушли ${s.gone}</span></span></div>`).join('') +
+        '<div class="hint">В прирост точки и ставку идут только «ушли» — подтверждённые отмены.</div></div>';
+    }
+    const isOpen = (x) => x.status === 'Новая' || x.status === 'В работе' || x.status === 'Дубль?';
+    const open = C.list.filter(isOpen), done = C.list.filter((x) => !isOpen(x) && x.status !== 'Дубль'), dups = C.list.filter((x) => x.status === 'Дубль');
+    h += '<h2 class="group">Ждут ответа</h2>' + (open.length ? open.map(cxCard).join('') : '<div class="card empty">Новых заявок нет 👍</div>');
+    if (done.length) h += '<h2 class="group">Итоги за последний месяц</h2>' + done.map(cxCard).join('');
+    if (dups.length) h += '<h2 class="group">Склеенные дубли</h2>' + dups.map(cxCard).join('');
+    if (S.user.isManager) {
+      h += vd.tildaKey ? tildaCard() : '<button class="link center-link" type="button" data-act="cxSetup">⚙️ Подключить форму Tilda ›</button>';
+    }
+    return h;
+  }
+  const tildaUrl = () => API_URL + (API_URL.indexOf('?') >= 0 ? '&' : '?') + 'tilda=' + encodeURIComponent(vd.tildaKey || '');
+  function tildaCard() {
+    return `<div class="card"><h2>Подключить форму Tilda</h2>
+      <div class="hint" style="word-break:break-all">${esc(tildaUrl())}</div>
+      <button class="btn mt" type="button" data-act="cxCopy">📋 Скопировать адрес</button>
+      <ol class="steps">
+        <li>Tilda → <b>Настройки сайта → Формы → Webhook</b> → вставьте адрес → <b>Добавить</b>. Если есть галочка <b>«Отправлять Cookies»</b> — включите (по ней приходит точка).</li>
+        <li>Откройте страницу <b>zrusitclenstvi</b> → блок формы → <b>Контент</b> → в «Приёмники данных» отметьте новый <b>Webhook</b> (Telegram оставьте) → <b>Сохранить</b> → <b>Опубликовать</b>.</li>
+        <li>Отправьте с сайта тестовую заявку: через минуту она появится здесь, а админам точки придёт сообщение. Тестовую заявку потом удалите: её строка — в листе «Отмены».</li>
+      </ol>
+      <div class="hint">Адрес секретный: по нему сервер принимает заявки. Если он попал не туда — <button class="link" style="display:inline;padding:0" type="button" data-act="cxReset">смените ключ</button> и вставьте новый адрес в Tilda.</div></div>`;
+  }
   function vDds() {
     const month = vd.month || S.today.slice(0, 7);
     let h = head('ДДС', 'Движение денег за месяц') + '<form class="card" data-submit="dds" novalidate>';
@@ -1601,6 +1702,34 @@
         render();
         break;
       }
+      case 'cx': {
+        const act = el.dataset.do;
+        const card = el.closest('.card');
+        const ta = card && card.querySelector('textarea');
+        const comment = ta ? ta.value.trim() : '';
+        if (['stay', 'pause', 'gone'].indexOf(act) >= 0 && !comment) { toast('Напишите, что предложили и чем закончилось', true); if (ta) ta.focus(); break; }
+        const ST = { take: 'В работе', stay: 'Удержали', pause: 'Пауза', gone: 'Отменено', reopen: 'В работе', notdup: 'Новая', dup: 'Дубль' };
+        save('cancel', { id, action: act, comment }, {
+          label: 'заявка на отмену',
+          apply: (s) => {
+            const x = s.cancels && s.cancels.list.find((y) => y.id === id);
+            if (!x) return;
+            x.status = ST[act];
+            if (act === 'take') { x.worker = s.user.name; x.mine = true; }
+            if (act === 'notdup') { x.worker = ''; x.dupInfo = ''; }
+            if (comment) x.comment = comment;
+          },
+        });
+        render();
+        break;
+      }
+      case 'cxSetup': run(el, () => api('cancelSetup', {}), (d) => { vd.tildaKey = d.key; render(); }); break;
+      case 'cxReset': {
+        if (!(await confirmBox('Сменить ключ? Старый адрес перестанет принимать заявки — в Tilda нужно будет вставить новый.'))) break;
+        run(el, () => api('cancelSetup', { reset: true }), (d) => { vd.tildaKey = d.key; render(); toast('Ключ сменён — обновите адрес в Tilda'); });
+        break;
+      }
+      case 'cxCopy': { const ok = await copyText(tildaUrl()); toast(ok ? 'Адрес скопирован 📋' : 'Не получилось — выделите адрес вручную', !ok); break; }
       case 'failOpen': { const r = failed && failed.op.retry; failed = null; if (r) go(r.view, r.data); else render(); break; }
       case 'failClose': failed = null; render(); break;
       case 'ddsCh': vd.ch = el.dataset.value; render(); break;
