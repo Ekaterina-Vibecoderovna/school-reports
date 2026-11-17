@@ -117,6 +117,16 @@
   .failbox { border: 1.5px solid var(--danger); }
   .failbox .sub { margin: 4px 0 10px; }
   .sub-kv { color: var(--hint); font-size: 14px; padding-left: 14px; }
+  .card.reg { display: flex; align-items: center; gap: 10px; }
+  .reg-info { flex: 1; min-width: 0; }
+  .reg-n { font-size: 34px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .reg-n.pop { animation: reg-pop .25s ease-out; }
+  @keyframes reg-pop { 0% { transform: scale(1); } 40% { transform: scale(1.25); color: var(--accent); } 100% { transform: scale(1); } }
+  .reg-minus { width: 44px; height: 44px; border-radius: 12px; border: 0; background: var(--soft); color: var(--text); font: inherit; font-size: 24px; cursor: pointer; flex: none; }
+  .reg-plus { width: auto; flex: none; padding: 0 18px; min-height: 56px; font-size: 17px; margin: 0; }
+  .center-link { display: block; margin: 14px auto 0; }
+  ol.steps { margin: 4px 0 0; padding-left: 20px; }
+  ol.steps li { margin: 7px 0; line-height: 1.45; }
   .ddsch button { font-size: 14px; }
   .dds-day { display: flex; justify-content: space-between; margin: 14px 0 2px; font-size: 13px; font-weight: 600; color: var(--hint); text-transform: uppercase; letter-spacing: .03em; }
   .dds-day:first-of-type { margin-top: 4px; }
@@ -519,7 +529,7 @@
   // ───────── навигация ─────────
   const VIEWS = {
     home: vHome, start: vStart, shiftTime: vShiftTime, cabinet: vCabinet, trials: vTrials, trialForm: vTrialForm,
-    followups: vFollowups, lost: vLost, history: vHistory, hours: vHours, tasks: vTasks, taskForm: vTaskForm, cash: vCash, cashForm: vCashForm, books: vBooks, bookIn: vBookIn, bookSet: vBookSet,
+    followups: vFollowups, lost: vLost, widget: vWidget, history: vHistory, hours: vHours, tasks: vTasks, taskForm: vTaskForm, cash: vCash, cashForm: vCashForm, books: vBooks, bookIn: vBookIn, bookSet: vBookSet,
     scripts: vScripts, close: vClose, done: vDone, day: vDay, summary: vSummary, dds: vDds,
   };
   const PARENT = { cashForm: 'cash', bookIn: 'books', bookSet: 'books', trialForm: 'trials', taskForm: 'tasks' };
@@ -537,6 +547,7 @@
     const month = S.today.slice(0, 7);
     if (v === 'history') { run(null, () => api('history', { month, who: 'all' }), (d) => go('history', { history: d.history, month, who: d.history.who })); return; }
     if (v === 'hours') { run(null, () => api('hours', { month, point: 'all' }), (d) => go('hours', { hours: d.hours, month, point: 'all' })); return; }
+    if (v === 'widget') { run(null, () => api('widget', {}), (d) => go('widget', { key: d.key })); return; }
     if (v === 'dds') { run(null, () => api('dds', { month, point: 'all' }), (d) => go('dds', { dds: d.dds, month, point: 'all', ch: 'all' })); return; }
     if (v === 'summary') { run(null, () => api('summary', { month, point: 'all' }), (d) => go('summary', { summary: d.summary, month, point: 'all' })); return; }
     go(v, data);
@@ -729,6 +740,12 @@
         <div class="sub" data-tick>${sh.stale ? 'Смена не закрыта — закройте её' : dur(mins) + where}</div></div></div>
         <div class="hint" data-hours>${esc(hoursText())}</div>
         <button class="btn ghost small mt" data-go="shiftTime" type="button">🕐 Изменить время начала или конца</button></div>`;
+      if (!sh.stale) {
+        h += `<div class="card reg"><div class="reg-info"><div class="sub">Записи на пробное</div><div class="reg-n" data-regs>${sh.regs || 0}</div></div>
+          <button class="reg-minus" type="button" data-act="reg" data-d="-1" aria-label="Убрать одну запись">−</button>
+          <button class="btn reg-plus" type="button" data-act="reg" data-d="1">＋ Записал(а)</button></div>
+          <button class="link center-link" style="margin:-4px auto 12px;padding-top:0" type="button" data-go="widget">📲 Кнопка «＋1» виджетом на экран iPhone ›</button>`;
+      }
     } else {
       const L0 = liveHours();
       h += `<div class="card shift"><div class="t">Смена не начата</div><div class="sub">Нажмите, когда пришли на работу${where}</div>
@@ -761,6 +778,7 @@
     h += `<button class="wide" data-go="scripts" type="button"><span class="ic">💬</span><span><span class="t">Скрипты продаж</span><br><span class="sub">быстрый поиск: ${S.scripts.length}</span></span><span class="chev">›</span></button>`;
     if (!u.isManager) h += `<button class="wide" data-go="history" type="button"><span class="ic">🗂</span><span><span class="t">Мои отчёты и часы</span><br><span class="sub">история всех смен</span></span><span class="chev">›</span></button>`;
     h += `<button class="btn${sh.open ? '' : ' ghost'}" data-go="close" type="button">🏁 ${sh.open ? 'Закрыть смену и отправить отчёт' : 'Заполнить отчёт за день'}</button>`;
+    if (homeIcon === 'missed' || homeIcon === 'unknown') h += '<button class="link center-link" type="button" data-act="addHome">📲 Добавить Барабашку на экран телефона</button>';
     if (u.isManager) {
       h += '<div class="grid mgr" style="margin-top:12px">' + tile('day', '📅', 'Отчёты по дням', 'все за выбранный день') +
         tile('history', '🗂', 'История отчётов', 'каждого сотрудника') + tile('hours', '⏱', 'Часы работы', 'по дням и неделям') +
@@ -1258,7 +1276,7 @@
       '<div class="two">' + input('start', 'Начало', { type: 'time', req: true, value: sh.open ? sh.start : '' }) +
       input('end', 'Конец', { type: 'time', req: true, value: nowHM() }) + '</div>' +
       '<h2>Пробные и продажи</h2><div class="two">' +
-      numInput('registrations', 'Записали на пробное', { req: true, int: true }) +
+      numInput('registrations', 'Записали на пробное', { req: true, int: true, value: sh.open && sh.regs ? String(sh.regs) : '', hint: sh.open && sh.regs ? 'со счётчика — проверьте' : '' }) +
       numInput('noTrialSales', 'Купили без пробного', { int: true, value: '0' }) + '</div>';
     if (S.books.stock.length) {
       h += '<h2>Учебники — сколько осталось</h2><div class="hint" style="margin:-4px 0 10px">Пересчитайте и поправьте, если не совпадает с учётом.</div><div class="books">' + S.books.stock.map((b, i) =>
@@ -1342,6 +1360,32 @@
       : select('month', 'Месяц', monthOptions(), { req: true, value: month, raw: true });
     h += '<button class="btn" type="submit">Показать</button></form>';
     return h + (vd.summary ? renderSummary(vd.summary) : '');
+  }
+  const widgetUrl = (minus) => API_URL + (API_URL.indexOf('?') >= 0 ? '&' : '?') + 'k=' + encodeURIComponent(vd.key || '') + (minus ? '&d=-1' : '');
+  function vWidget() {
+    let h = head('Виджет на iPhone', 'Запись на пробное — одним нажатием с экрана телефона');
+    h += `<div class="card"><h2>1. Скопируйте вашу ссылку</h2>
+      <div class="hint" style="word-break:break-all">${esc(widgetUrl(false))}</div>
+      <button class="btn mt" type="button" data-act="copyWidget" data-d="1">📋 Скопировать ссылку</button>
+      <div class="hint">Ссылка личная: по ней запись засчитывается вам. Не пересылайте её никому.</div></div>`;
+    h += `<div class="card"><h2>2. Сделайте команду</h2><ol class="steps">
+      <li>Откройте приложение <b>«Команды»</b> (Shortcuts) → <b>＋</b> вверху.</li>
+      <li><b>Добавить действие</b> → в поиске наберите <b>URL</b> → <b>«Получить содержимое URL»</b> (Get Contents of URL).</li>
+      <li>Нажмите на синее слово <b>URL</b> и вставьте ссылку.</li>
+      <li>Нажмите <b>›</b> рядом с действием (Ещё / Show More) → <b>Метод</b> (Method) → <b>POST</b>. Это обязательно: без POST запись не засчитается.</li>
+      <li>В поиске действий внизу найдите <b>«Показать уведомление»</b> (Show Notification). В текст само подставится «Содержимое URL».</li>
+      <li>Нажмите на название команды вверху → <b>Переименовать</b> → <b>＋ Пробное</b>. Можно выбрать значок и цвет. Нажмите <b>Готово</b>.</li>
+      <li>Нажмите ▶ для проверки. Если iPhone спросит, можно ли подключаться к script.google.com и показывать уведомления, — <b>Разрешить всегда</b>.</li></ol></div>`;
+    h += `<div class="card"><h2>3. Поставьте виджет на экран</h2><ol class="steps">
+      <li>Долго нажмите на пустое место экрана «Домой» → <b>Изменить</b> (или <b>＋</b> слева вверху) → <b>Добавить виджет</b>.</li>
+      <li>Найдите <b>«Команды»</b> → самый маленький виджет → <b>Добавить виджет</b>.</li>
+      <li>Долго нажмите на новый виджет → <b>Изменить виджет</b> → выберите <b>＋ Пробное</b>.</li>
+      <li>Нажмите на виджет: сверху появится <b>«✅ +1. Записей на пробное за смену: …»</b>, а в Барабашке число обновится при следующем открытии.</li></ol>
+      <div class="note">Виджет считает только во время смены: сначала «Начать смену» в Барабашке. Число попадёт в отчёт, как и со счётчика в приложении.</div></div>`;
+    h += `<div class="card"><h2>Нажали лишний раз?</h2><div class="sub">Нажмите «−» на главном экране Барабашки. Или сделайте вторую команду «− Пробное» так же, но по этой ссылке:</div>
+      <button class="btn ghost small mt" type="button" data-act="copyWidget" data-d="-1">📋 Скопировать ссылку для −1</button></div>`;
+    h += '<button class="link center-link" type="button" data-act="widgetReset">🔄 Сменить ключ (если ссылка попала к кому-то ещё)</button>';
+    return h;
   }
   function vDds() {
     const month = vd.month || S.today.slice(0, 7);
@@ -1536,6 +1580,35 @@
       case 'failOpen': { const r = failed && failed.op.retry; failed = null; if (r) go(r.view, r.data); else render(); break; }
       case 'failClose': failed = null; render(); break;
       case 'ddsCh': vd.ch = el.dataset.value; render(); break;
+      case 'reg': {
+        const d = Number(el.dataset.d);
+        if (!S.shift.open || (d < 0 && !(S.shift.regs > 0))) break;
+        // быстрые нажатия складываются в одно сохранение
+        const last = queue[queue.length - 1];
+        if (last && last.action === 'reg') { last.payload.delta += d; if (!last.payload.delta) queue.pop(); derive(); updateBusy(); } else {
+          const payload = { delta: d };
+          save('reg', payload, { label: 'счётчик записей на пробное', quiet: true,
+            apply: (s) => { if (s.shift.open) s.shift.regs = Math.max(0, (s.shift.regs || 0) + payload.delta); } });
+        }
+        const n = $app.querySelector('[data-regs]');
+        if (n) { n.textContent = S.shift.regs; n.classList.remove('pop'); void n.offsetWidth; n.classList.add('pop'); }
+        try { if (inTg && tg.isVersionAtLeast('6.1')) tg.HapticFeedback.impactOccurred(d > 0 ? 'medium' : 'light'); } catch (e) { /* нет вибрации */ }
+        break;
+      }
+      case 'copyWidget': {
+        const ok = await copyText(widgetUrl(el.dataset.d === '-1'));
+        toast(ok ? 'Ссылка скопирована 📋' : 'Не получилось скопировать — выделите ссылку вручную', !ok);
+        break;
+      }
+      case 'widgetReset': {
+        if (!(await confirmBox('Сменить ключ? Старая ссылка перестанет работать, в команде на iPhone нужно будет вставить новую.'))) break;
+        run(el, () => api('widget', { reset: true }), (d) => { vd.key = d.key; render(); toast('Ключ сменён — скопируйте новую ссылку'); });
+        break;
+      }
+      case 'addHome': {
+        try { tg.addToHomeScreen(); } catch (e) { toast('Ваш Telegram пока не умеет добавлять иконку — обновите приложение Telegram', true); }
+        break;
+      }
       case 'ddsSend': {
         const f = el.closest('form');
         const month = f.elements.month.value, point = f.elements.ddsPoint ? f.elements.ddsPoint.value : 'all';
@@ -1803,6 +1876,14 @@
       if (!e.silent) screen('😕', 'Не получилось загрузить', esc(e.message), true);
     }
   }
+  // Иконка Барабашки на экране телефона (Telegram 8.0+)
+  let homeIcon = '';
+  try {
+    if (inTg && tg.isVersionAtLeast('8.0') && tg.checkHomeScreenStatus) {
+      tg.checkHomeScreenStatus((st) => { homeIcon = st; if (view === 'home') softRender(); });
+      tg.onEvent('homeScreenAdded', () => { homeIcon = 'added'; toast('📲 Барабашка теперь на экране телефона'); if (view === 'home') softRender(); });
+    }
+  } catch (e) { /* старый Telegram */ }
   boot();
 })();
 </script>
